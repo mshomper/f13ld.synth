@@ -442,20 +442,35 @@ class SynthPredictor {
     return x;
   }
   decodeRecipe(x) {
+    // Build a recipe in F13LD.mesh's canonical schema (verified against an
+    // exported Vault recipe). Top-level shape: { meta, surface, geometry }.
+    // No top-level family/normal_weights — Mesh routes by surface.preset.
     const E = this.encoding;
     let off = 0;
+
+    // mode one-hot
     const modeOH = []; for (let i = 0; i < E.modes.length; i++) modeOH.push(x[off++]);
     const mode = E.modes[argmax(modeOH)];
+
+    // Geometry scalars
     const cell_scale = +x[off++].toFixed(3);
-    const wall_thickness = +x[off++].toFixed(3);
-    const pipe_radius = +x[off++].toFixed(3);
+    const wall_thickness_raw = +x[off++].toFixed(3);
+    const pipe_radius_raw = +x[off++].toFixed(3);
     const offset = +x[off++].toFixed(3);
-    const normal_weights = { wx:+x[off++].toFixed(3), wy:+x[off++].toFixed(3), wz:+x[off++].toFixed(3) };
+
+    // Skip normal_weights (not in canonical recipe — the predictor learned them
+    // as an input, but Mesh doesn't accept them as recipe state today)
+    off += 3;
+
+    // Terms: each term is {on, coef, factors:[{trig, fx, fy, fz}, ...]}
+    // Trig string already encodes the axis (sin(x), cos(z), etc.), so we
+    // collapse our internal "isCos + axisOH" representation back into the string.
     const terms = [];
     for (let t = 0; t < E.max_terms; t++) {
       const tActive = x[off++] > 0.5;
       const coef = +x[off++].toFixed(3);
-      const phase_shift = { x:+x[off++].toFixed(3), y:+x[off++].toFixed(3), z:+x[off++].toFixed(3) };
+      // Skip per-term phase shifts (not in canonical recipe — phase is at geometry level)
+      off += 3;
       const factors = [];
       for (let f = 0; f < E.max_factors; f++) {
         const fActive = x[off++] > 0.5;
@@ -464,16 +479,43 @@ class SynthPredictor {
         const fz = Math.max(1, Math.min(3, Math.round(x[off++])));
         const isCos = x[off++] > 0.5;
         const axisOH = [x[off++], x[off++], x[off++]];
-        if (fActive) factors.push({ trig: (isCos?'cos':'sin')+'('+E.trig_axes[argmax(axisOH)]+')', fx, fy, fz });
+        if (fActive) {
+          const axis = E.trig_axes[argmax(axisOH)];
+          factors.push({
+            trig: (isCos ? 'cos' : 'sin') + '(' + axis + ')',
+            fx, fy, fz
+          });
+        }
       }
-      if (tActive && factors.length) terms.push({ on:true, coef, phase_shift, factors });
+      if (tActive && factors.length > 0) {
+        terms.push({ on: true, coef, factors });
+      }
     }
+
+    // Build geometry block with mode-specific fields nulled out where not applicable
+    const geometry = {
+      offset,
+      cell_scale,
+      mode,
+      wall_thickness: mode === 'shell' ? wall_thickness_raw : null,
+      pipe_radius:    mode === 'pi-tpms' ? pipe_radius_raw : null,
+      phase_shift: null,
+      gradient: { enabled: false }
+    };
+
     return {
-      family: this.meta.family,
-      meta: { source:'f13ld.synth', version:this.meta.version, generated_at:new Date().toISOString() },
-      geometry: { mode, cell_scale, wall_thickness: mode==='shell'?wall_thickness:null, pipe_radius: mode==='pi-tpms'?pipe_radius:null, offset },
-      normal_weights,
-      surface: { type:'terms', terms }
+      meta: {
+        version: this.meta.version,
+        timestamp: new Date().toISOString(),
+        preset: 'gyroid',  // TODO: when multi-preset training lands, infer from recipe context
+        source: 'f13ld.synth'
+      },
+      surface: {
+        type: 'terms',
+        preset: 'gyroid',
+        terms
+      },
+      geometry
     };
   }
   async inverseSearch({ targetsNormalized, weights, n = 8, nCandidates = 2000 }) {
@@ -1009,11 +1051,17 @@ function buildResultCard(r, rank, targets) {
 function handoffToMesh(rank) {
   const r = lastResults.synth[rank - 1];
   if (!r || !r.recipe) { alert('No recipe available.'); return; }
+  // Match F13LD.mesh's URL ingest format exactly: plain encodeURIComponent of
+  // JSON.stringify(recipe). NOT base64-url. Mesh decodes via:
+  //   JSON.parse(decodeURIComponent(searchParams.get('r')))
   try {
     const json = JSON.stringify(r.recipe);
-    const b64 = btoa(unescape(encodeURIComponent(json))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-    window.open(`https://mshomper.github.io/f13ld.mesh/?r=${b64}`, '_blank');
-  } catch(e) { alert('Could not encode recipe: ' + e.message); }
+    const url = `https://mshomper.github.io/f13ld.mesh/?r=${encodeURIComponent(json)}`;
+    window.open(url, '_blank');
+  } catch (e) {
+    console.error('Mesh handoff failed:', e);
+    alert('Could not encode recipe: ' + e.message);
+  }
 }
 
 function saveSynthToVault(rank) {
