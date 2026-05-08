@@ -38,7 +38,7 @@ html,body{min-height:100%;background:#06080f;color:#e0e0ff;font-family:'Exo 2',s
 
 h2.sec-title{font-size:11px;font-weight:600;color:#7c8aaa;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-shrink:0}
 h2.sec-title .sec-rule{flex:1;height:0.5px;background:#1a2a3a}
-h2.sec-title .sec-aux{font-size:9px;color:#5a6680;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;text-transform:none;font-weight:400}
+h2.sec-title .sec-aux{font-size:11px;color:#a0aac0;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;text-transform:none;font-weight:400}
 
 /* MATERIAL CARD */
 #refPanel{flex-shrink:0;padding:12px 14px}
@@ -76,13 +76,14 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .pad-card.precision .pad-precision{display:grid}
 
 .pad-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
-.pad-title{font-size:11px;font-weight:600;color:#c0c8e0;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:6px;flex:1;min-width:0}
-.pad-title:hover{color:#7BD3E3}
+.pad-title{font-size:11px;font-weight:600;color:#c0c8e0;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:6px;flex:1;min-width:0;padding:3px 4px;margin:-3px -4px;border-radius:4px;transition:background 0.12s}
+.pad-title:hover{color:#c8f542;background:rgba(200,245,66,0.06)}
+.pad-title:hover .pad-title-flip{color:#c8f542}
 .pad-title-x{color:#7BD3E3}
 .pad-title-vs{color:#3a4a70;font-weight:400}
 .pad-title-y{color:#FFB670}
-.pad-title-flip{font-size:8px;color:#3a4a70;letter-spacing:0.06em;text-transform:none;font-weight:400;font-family:'IBM Plex Mono',monospace;margin-left:auto}
-.pad-card:hover .pad-title-flip{color:#5a6680}
+.pad-title-flip{font-size:13px;color:#5a6680;letter-spacing:0;text-transform:none;font-weight:400;font-family:'IBM Plex Mono',monospace;margin-left:auto;transition:color 0.12s}
+.pad-card:hover .pad-title-flip{color:#7c8aaa}
 
 .pad-toggle{display:flex;background:#0a0d18;border:0.5px solid #1a2030;border-radius:14px;overflow:hidden;flex-shrink:0;font-family:'IBM Plex Mono',monospace}
 .pad-toggle button{font-size:8px;padding:3px 8px;background:transparent;border:none;color:#5a6680;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;transition:background 0.12s,color 0.12s;font-family:inherit}
@@ -94,12 +95,14 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .pad-svg-wrap{position:relative;cursor:crosshair;user-select:none;-webkit-user-select:none}
 .pad-svg{display:block;width:100%;height:100%;border-radius:5px;background:#0a0d18}
 .pad-grid-line{stroke:#1a2030;stroke-width:0.5}
-.pad-axis-label{font-family:'IBM Plex Mono',monospace;font-size:8px;fill:#5a6680;letter-spacing:0.04em}
-.pad-corner-label{font-family:'IBM Plex Mono',monospace;font-size:8px;fill:#7c8aaa;letter-spacing:0.04em;font-style:italic}
-.pad-dot-glow{fill:none;stroke:#4FB8C9;stroke-width:1.5;opacity:0.3}
-.pad-dot{fill:#0a1820;stroke:#4FB8C9;stroke-width:2}
+.pad-axis-label{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:#7c8aaa;letter-spacing:0.04em;font-weight:500}
+.pad-corner-label{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#a0aac0;letter-spacing:0.04em;font-style:italic}
+.pad-dot-glow{fill:none;stroke:#c8f542;stroke-width:1.5;opacity:0.35}
+.pad-dot{fill:#0a1820;stroke:#c8f542;stroke-width:2}
 .pad-card.require .pad-dot{stroke:#FFB670}
 .pad-card.require .pad-dot-glow{stroke:#FFB670}
+.pad-card:not(.disabled):not(.require){border:0.5px solid rgba(200,245,66,0.65)}
+.pad-card.require{border:1px solid #FFB670}
 
 .pad-readout{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;font-size:9px;font-family:'IBM Plex Mono',monospace;color:#5a6680;letter-spacing:0.04em}
 .pad-readout .ro-x,.pad-readout .ro-y{display:flex;gap:5px;align-items:baseline}
@@ -116,10 +119,9 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .pad-prec-cell .pp-units{font-size:8px;color:#5a6680;text-align:right;font-family:'IBM Plex Mono',monospace}
 
 /* Search */
-#searchBtn{flex-shrink:0;font-size:12px;padding:11px 16px;border:0.5px solid #4FB8C9;border-radius:8px;background:rgba(79,184,201,0.1);color:#4FB8C9;cursor:pointer;font-family:'Exo 2',sans-serif;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;transition:background 0.15s,box-shadow 0.15s;margin-top:12px}
-#searchBtn:hover:not(:disabled){background:rgba(79,184,201,0.2);box-shadow:0 0 12px rgba(79,184,201,0.25)}
+#searchBtn{flex-shrink:0;font-size:14px;padding:14px 16px;border:0.5px solid #4FB8C9;border-radius:8px;background:rgba(79,184,201,0.18);color:#7BD3E3;cursor:pointer;font-family:'Exo 2',sans-serif;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;transition:background 0.15s,box-shadow 0.15s,color 0.15s;margin-top:12px}
+#searchBtn:hover:not(:disabled){background:rgba(79,184,201,0.28);color:#c0e8f0;box-shadow:0 0 14px rgba(79,184,201,0.3)}
 #searchBtn:disabled{opacity:0.5;cursor:not-allowed}
-#searchBtn .btn-sub{display:block;font-size:9px;color:#7BD3E3;font-weight:400;letter-spacing:0.05em;text-transform:none;margin-top:2px;font-family:'IBM Plex Mono',monospace;opacity:0.85}
 
 /* Right column */
 #modelStatus{flex-shrink:0;background:#0a0d18;border:0.5px solid #2a2a3a;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:10px}
@@ -144,7 +146,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .results-meta{font-size:10px;color:#5a6680;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em}
 .results-meta b{color:#7c8aaa;font-weight:500}
 
-.results-list{display:flex;flex-direction:column;gap:8px}
+.results-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 
 /* Cards */
 .result-card{background:#0c1a24;border:0.5px solid #1a3a4a;border-radius:9px;padding:11px 13px;transition:border-color 0.15s,box-shadow 0.15s}
@@ -154,28 +156,29 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .rc-rank-num{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:#4FB8C9;width:26px}
 .rc-source-tag{font-size:9px;padding:2px 7px;border-radius:3px;letter-spacing:0.06em;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;background:rgba(79,184,201,0.1);border:0.5px solid rgba(79,184,201,0.4);color:#7BD3E3}
 .rc-source-tag.ood{background:rgba(255,160,40,0.08);border-color:rgba(255,160,40,0.4);color:#ffa028}
-.rc-scores{display:flex;align-items:center;gap:14px;font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em}
-.rc-score-block{display:flex;align-items:center;gap:5px}
-.rc-score-block .lbl{color:#5a6680;text-transform:uppercase;font-size:9px;letter-spacing:0.08em}
-.rc-score-block .val{font-weight:500}
+.rc-scores{display:flex;align-items:center;gap:14px;font-size:12px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em}
+.rc-score-block{display:flex;align-items:center;gap:6px}
+.rc-score-block .lbl{color:#5a6680;text-transform:uppercase;font-size:10px;letter-spacing:0.08em}
+.rc-score-block .val{font-weight:500;font-size:13px}
 .rc-score-block .val.match{color:#7BD3E3}
 .rc-score-block .val.valid{color:#5BB892}
 .rc-score-block .val.warn{color:#ffa028}
 .rc-score-block .rc-bell{flex-shrink:0;display:block}
 
-.rc-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 18px;margin-bottom:10px}
-.rc-metric{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-family:'IBM Plex Mono',monospace;padding:2px 0}
-.rc-metric .m-name{color:#7c8aaa;letter-spacing:0.02em;display:flex;align-items:center;gap:5px}
-.rc-metric .m-r2{font-size:8px;color:#3a4a70;padding:1px 4px;border:0.5px solid #2a3a5a;border-radius:2px;font-family:'IBM Plex Mono',monospace}
+.rc-metrics{display:grid;grid-template-columns:1fr;gap:6px 18px;margin-bottom:10px}
+.rc-metric{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-family:'IBM Plex Mono',monospace;padding:2px 0}
+.rc-metric .m-name{color:#7c8aaa;letter-spacing:0.02em;display:flex;align-items:center;gap:6px}
+.rc-metric .m-r2{font-size:10px;color:#3a4a70;padding:1px 5px;border:0.5px solid #2a3a5a;border-radius:2px;font-family:'IBM Plex Mono',monospace}
 .rc-metric .m-r2.high{color:#5BB892;border-color:rgba(91,184,146,0.4)}
 .rc-metric .m-r2.med{color:#4FB8C9;border-color:rgba(79,184,201,0.4)}
 .rc-metric .m-r2.low{color:#ffa028;border-color:rgba(255,160,40,0.4)}
+.rc-metric .m-z{font-size:10px;padding:1px 5px;border:0.5px solid;border-radius:2px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em}
 .rc-metric.rough .m-name{color:#5a6680}
 .rc-metric.rough .m-vals{opacity:0.55}
 .rc-metric .m-vals{display:flex;align-items:center;gap:7px;color:#c0c8e0}
 .rc-metric .m-pred{color:#e0e0ff;font-weight:500}
 .rc-metric .m-pred.unresolved{color:#7c8aaa;font-style:italic}
-.rc-metric .m-units{font-size:9px;color:#5a6680}
+.rc-metric .m-units{font-size:10px;color:#5a6680}
 
 .rc-actions{display:flex;gap:7px;margin-top:8px;padding-top:8px;border-top:0.5px solid #1f2840;align-items:center}
 .rc-btn{font-size:10px;padding:5px 11px;border-radius:14px;cursor:pointer;font-family:inherit;font-weight:500;letter-spacing:0.06em;transition:background 0.15s,border-color 0.15s;text-transform:uppercase;border:0.5px solid}
@@ -195,6 +198,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 @media (max-width:980px){
   #main{flex-direction:column}
   #leftCol{flex:0 0 auto}
+  .results-list{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -225,8 +229,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
       <div class="fh-tool-name" style="color:#0A5566">SYNTH</div>
     </div>
     <div class="fh-right">
-      <span class="fh-status connecting" id="dbStatus">predictor: loading</span>
-      <span class="fh-version">v0.1.0</span>
+      <span class="fh-version">v0.2</span>
       <div class="fh-icon" style="background:#E0F2F4">
         <svg width="18" height="18" viewBox="0 0 40 40">
           <circle cx="20" cy="20" r="13" fill="none" stroke="#0A5566" stroke-width="1.6"/>
@@ -239,10 +242,6 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
         </svg>
       </div>
     </div>
-  </div>
-
-  <div class="dev-banner">
-    <b>v0.1.</b> 9-metric inverse design synthesizer · drag pads to set design intent · click pad title to flip into precision mode
   </div>
 
   <!-- MAIN -->
@@ -282,7 +281,6 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 
         <button id="searchBtn" onclick="runSearch()">
           Synthesize Designs
-          <span class="btn-sub">2,000 candidates · ranked by score × validity</span>
         </button>
       </div>
     </div>
@@ -551,24 +549,40 @@ class SynthPredictor {
       // Weighted-RMS z-score across active metrics. Each per-metric residual is
       // measured in units of the model's residual sigma (derived from R2 + range),
       // so the yardstick reflects what "close" actually means for THIS predictor.
+      // |z| clamped at 3 before squaring: matches the bell's visual cap and
+      // prevents one out-of-distribution metric from detonating the aggregate.
       let z2sum = 0;
+      const zPerMetric = {};
       for (let j = 0; j < M.length; j++) {
         const w = aw[j]; if (w === 0) continue;
         const t = targetsNormalized[M[j]]; if (t == null) continue;
-        const z = (pred[M[j]] - t) / sigmas[j];
-        z2sum += z * z * w;
+        const zRaw = (pred[M[j]] - t) / sigmas[j];
+        zPerMetric[M[j]] = zRaw;
+        const zClamped = Math.min(Math.abs(zRaw), 3);
+        z2sum += zClamped * zClamped * w;
       }
       const zRms = Math.sqrt(z2sum / tw);
       // Gaussian kernel exp(-z^2/6): hits the user-intuition targets of
       // ~85% at 1 sigma, ~50% at 2 sigma, fading toward 0 beyond ~3 sigma.
       const score = Math.exp(-(zRms * zRms) / 6);
-      cands.push({ x, predicted:pred, validity:val, zRms, score });
+      cands.push({ x, predicted:pred, validity:val, zRms, score, zPerMetric });
       if ((i & 0xFF) === 0xFF) await new Promise(r => setTimeout(r, 0));
     }
     cands.sort((a,b) => (b.score * Math.sqrt(b.validity)) - (a.score * Math.sqrt(a.validity)));
+    // Diagnostic: surface per-metric z breakdown for the top candidate, worst
+    // offender first. Helps identify training-data coverage gaps when the
+    // aggregate score reads bad — which metric is dragging it down?
+    if (cands.length > 0) {
+      const top = cands[0];
+      const zStr = Object.entries(top.zPerMetric)
+        .sort((a,b) => Math.abs(b[1]) - Math.abs(a[1]))
+        .map(([k, z]) => `${k}: ${z >= 0 ? '+' : ''}${z.toFixed(2)}σ`)
+        .join('  ·  ');
+      console.info(`[F13LD.synth] Top candidate · score ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
+    }
     console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
     return cands.slice(0, n).map(c => ({
-      metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity,
+      metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity, zPerMetric: c.zPerMetric,
       recipe: this.decodeRecipe(c.x), oodFlag: c.validity < 0.7
     }));
   }
@@ -606,6 +620,18 @@ function dotColorForZ(z) {
     }
   }
   return 'rgb(220,38,38)';
+}
+
+// Per-metric signed sigma badge. + means predictor overshoots target, − means
+// undershoots. Clamped to ±3σ for display. Border + text both colored by |z|
+// using the same ramp as the bell dot, so per-metric and aggregate read alike.
+function sigmaBadgeHTML(z) {
+  const color = dotColorForZ(z);
+  let disp;
+  if (z > 3) disp = '>+3σ';
+  else if (z < -3) disp = '<−3σ';
+  else disp = `${z >= 0 ? '+' : ''}${z.toFixed(1)}σ`;
+  return `<span class="m-z" style="color:${color};border-color:${color}">${disp}</span>`;
 }
 
 // Bell-curve sparkline SVG. Curve y=exp(-x^2/6) sampled at 13 points, x in [-3,3]
@@ -1083,12 +1109,14 @@ function buildResultCard(r, rank, targets) {
     const r2 = Predictor.metricsR2 ? Predictor.metricsR2[key] : null;
     const r2Class = r2 == null ? '' : (r2 >= 0.7 ? 'high' : r2 >= 0.4 ? 'med' : 'low');
     const r2Tag = r2 != null ? `<span class="m-r2 ${r2Class}">R² ${r2.toFixed(2)}</span>` : '';
+    const zVal = (r.zPerMetric && r.zPerMetric[key] != null) ? r.zPerMetric[key] : null;
+    const zTag = zVal != null ? sigmaBadgeHTML(zVal) : '';
     const rough = r2 != null && r2 < 0.5 ? 'rough' : '';
     const label = pRes.isResolved ? m.labelAbs : m.label;
     const predDisplay = pNorm == null ? '—' : (pRes.isResolved ? formatVal(pRes.value, m.decimals) : formatVal(pNorm, m.decimals));
     const unitDisplay = pRes.isResolved ? pRes.unit : (m.norm_kind !== 'none' ? 'norm' : (m.unit || ''));
     const targMarker = targeted ? '◉' : '·';
-    metricsHTML += `<div class="rc-metric ${rough}"><span class="m-name">${targMarker} ${label} ${r2Tag}</span><span class="m-vals"><span class="m-pred">${predDisplay}</span>${unitDisplay?`<span class="m-units">${unitDisplay}</span>`:''}</span></div>`;
+    metricsHTML += `<div class="rc-metric ${rough}"><span class="m-name">${targMarker} ${label} ${r2Tag}${zTag}</span><span class="m-vals"><span class="m-pred">${predDisplay}</span>${unitDisplay?`<span class="m-units">${unitDisplay}</span>`:''}</span></div>`;
   }
 
   card.innerHTML = `
@@ -1192,8 +1220,7 @@ async function boot() {
   buildPadRack();
 
   const status = document.getElementById('dbStatus');
-  status.className = 'fh-status connecting';
-  status.textContent = 'loading…';
+  if (status) { status.className = 'fh-status connecting'; status.textContent = 'loading…'; }
   refreshModelStatus();
 
   // Load Vault and Predictor in parallel — both are needed for full status display.
@@ -1205,12 +1232,9 @@ async function boot() {
   if (Predictor.loaded) {
     const family = document.getElementById('familySel').value;
     const v = vaultCounts ? `· vault ${vaultCounts.byFamily[family] || 0}` : '· vault offline';
-    status.className = 'fh-status connected';
-    status.textContent = `predictor ${Predictor.meta.n_valid} ${v}`;
+    if (status) { status.className = 'fh-status connected'; status.textContent = `predictor ${Predictor.meta.n_valid} ${v}`; }
   } else {
-    status.className = 'fh-status error';
-    status.textContent = 'predictor: error';
-    status.title = Predictor.loadError || 'unknown error';
+    if (status) { status.className = 'fh-status error'; status.textContent = 'predictor: error'; status.title = Predictor.loadError || 'unknown error'; }
   }
   refreshModelStatus();
 }
