@@ -3,11 +3,16 @@ F13LD.Synth — Pattern A trainer (CLI, family-level)
 
 Usage
 -----
-File-mode (works today, reads sweep JSONs from a directory):
+File-mode (reads sweep JSONs from a directory):
     python train_synth.py tpms --from-files ./sweeps --out ./weights/tpms.json
 
-Vault-mode (stubbed; activates once vault_client.py is wired):
+Vault-mode (pulls directly from F13LD.vault — requires vault_client.py
+beside this file, plus VAULT_SUPABASE_URL + VAULT_SUPABASE_ANON_KEY env vars):
     python train_synth.py tpms --from-vault --out ./weights/tpms.json
+
+Optional vault-mode filters:
+    --since YYYY-MM-DD   only fetch designs created on/after this date
+    --limit N            cap rows fetched (useful for quick test runs)
 
 What it does
 ------------
@@ -19,12 +24,16 @@ What it does
 4. Trains:
      - Validity classifier (Random Forest, all designs) — predicts P(valid)
      - Metrics regressor   (Random Forest, valid only) — predicts 9 normalized outputs
-5. Evaluates on a 20% held-out split, reports per-metric R²
+5. Evaluates on a 20% held-out split, reports per-metric R² and residual σ
 6. Exports model + metadata to a single JSON the browser can load
+
+The exported bundle includes per-metric residual σ on the test split, which the
+F13LD.synth predictor reads to drive its bell-curve sparkline scoring without
+any browser-side approximation.
 
 Prereqs
 -------
-    pip install numpy scikit-learn
+    pip install numpy scikit-learn requests
 
 When the trained-model JSON is committed to f13ld.synth/weights/, F13LD.Synth's
 synthesized engine activates automatically for that family.
@@ -101,27 +110,135 @@ def load_from_files(directory, family_filter):
             }
 
 
-def load_from_vault(family_filter):
-    """Yield (design_dict, reference_params) for every design in F13LD.vault
-    matching the family. Stubbed until vault_client.py lands."""
-    # TODO: implement once Vault client is provided
-    #
-    # from vault_client import VaultClient
-    # vault = VaultClient()
-    # for row in vault.iterByFamily(family_filter):
-    #     # Pull design recipe + reference params out of JSONB
-    #     yield row["design_json"], {
-    #         "E_solid":   row["material_context"].get("E_solid_GPa"),
-    #         "k_solid":   row["material_context"].get("k_solid_W_mK"),
-    #         "sigma_ref": row["material_context"].get("sigma_ref_GPa"),
-    #         "cell_mm":   row["cell_mm"],
-    #         "source_file": "vault",
-    #         "preset":    row["preset"],
-    #     }
-    raise NotImplementedError(
-        "Vault-mode is not yet wired. Wait for vault_client.py, then implement this function. "
-        "Use --from-files for now."
+def load_from_vault(family_filter, since=None, limit=None):
+    """Yield (design_dict, reference_params) for designs in F13LD.vault matching
+    the requested family.
+
+    Vault stores each design as a flat row with columns + a `recipe` JSON blob.
+    The trainer expects the older sweep_results shape: a dict with
+    `design.geometry`, `design.surface`, and `browser`. This adapter rebuilds
+    that shape from the recipe (geometry, surface, homogenization) + a few
+    top-level columns (e_solid_gpa, sigma_ref_gpa, cell_size_mm, material).
+    """
+    try:
+        from vault_client import VaultClient
+    except ImportError:
+        sys.exit(
+            "vault_client.py not found. Place it next to train_synth.py, "
+            "and set VAULT_SUPABASE_URL + VAULT_SUPABASE_ANON_KEY env vars."
+        )
+    try:
+        vault = VaultClient()
+    except ValueError as e:
+        sys.exit(f"Vault setup error: {e}")
+
+    print(f"Querying F13LD.vault for family={family_filter} ...")
+    rows = vault.fetch_designs(
+        family=family_filter,
+        valid_only=True,
+        exclude_degenerate=True,
+        since=since,
+        limit=limit,
+        verbose=True,
     )
+    print(f"Loaded {len(rows)} valid {family_filter} rows from Vault")
+
+    skipped_recipe = 0
+    skipped_k_solid = 0
+    skipped_other = 0
+    yielded = 0
+
+    for row in rows:
+        recipe = _parse_recipe(row.get("recipe"))
+        if recipe is None:
+            skipped_recipe += 1
+            continue
+
+        # Trainer's expected per-design shape: design.{geometry,surface} + browser.
+        # Vault flattens these into the recipe blob; rebuild the older shape so
+        # the encoder/extractor doesn't need to know data sourced from Vault.
+        homog = recipe.get("homogenization") or {}
+        design_dict = {
+            "design": {
+                "geometry": recipe.get("geometry") or {},
+                "surface": recipe.get("surface") or {},
+            },
+            "browser": homog,
+        }
+
+        # Reference params: prefer top-level columns (authoritative), fall back
+        # to fields inside the recipe's homogenization block.
+        e_solid = row.get("e_solid_gpa")
+        if e_solid is None:
+            e_solid = homog.get("E_solid_GPa")
+        sigma_ref = row.get("sigma_ref_gpa")
+        if sigma_ref is None:
+            sigma_ref = homog.get("sigma_ref_GPa")
+        cell_mm = row.get("cell_size_mm") or 2  # match file-mode default
+        k_solid = _extract_k_solid(row.get("material"))
+        preset = (recipe.get("meta") or {}).get("preset") or row.get("preset", "")
+
+        if k_solid is None:
+            skipped_k_solid += 1
+            continue
+        if e_solid is None or sigma_ref is None:
+            skipped_other += 1
+            continue
+
+        yielded += 1
+        yield design_dict, {
+            "E_solid": float(e_solid),
+            "k_solid": float(k_solid),
+            "sigma_ref": float(sigma_ref),
+            "cell_mm": float(cell_mm),
+            "source_file": "vault",
+            "preset": preset,
+        }
+
+    if skipped_recipe + skipped_k_solid + skipped_other > 0:
+        print(
+            f"  Skipped during adapt: "
+            f"{skipped_recipe} unparseable recipe · "
+            f"{skipped_k_solid} no k_solid · "
+            f"{skipped_other} missing E_solid/sigma_ref"
+        )
+    if skipped_k_solid > 0 and skipped_k_solid == len(rows):
+        print(
+            "  ALL rows missing k_solid — `material` column may be a name string "
+            "rather than a JSON dict. Add a materials lookup or update ingest."
+        )
+    print(f"  Yielded {yielded} usable designs to trainer")
+
+
+def _parse_recipe(recipe_field):
+    """Recipe column may be parsed jsonb (dict) or stringified JSON."""
+    if isinstance(recipe_field, dict):
+        return recipe_field
+    if isinstance(recipe_field, str):
+        try:
+            parsed = json.loads(recipe_field)
+            return parsed if isinstance(parsed, dict) else None
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return None
+
+
+def _extract_k_solid(material_field):
+    """Pull k_W_mK out of the `material` column. Tolerates dict or stringified
+    JSON. Returns None if material is missing, unparseable, or doesn't carry
+    a thermal conductivity field — the trainer will then skip the row."""
+    if material_field is None:
+        return None
+    if isinstance(material_field, dict):
+        return material_field.get("k_W_mK")
+    if isinstance(material_field, str):
+        try:
+            parsed = json.loads(material_field)
+            if isinstance(parsed, dict):
+                return parsed.get("k_W_mK")
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
 
 
 def _infer_family_from_preset(preset):
@@ -230,9 +347,11 @@ def extract_outputs(d, refs):
 # TRAINING
 # ============================================================
 
-def train(family, design_iter, out_path, n_estimators=150, decimals=4):
+def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_source=None):
     print(f"\n=== F13LD.Synth trainer · family={family} ===")
     print(f"Hyperparameters: n_estimators={n_estimators}, threshold_precision={decimals} decimals")
+    if data_source:
+        print(f"Data source: {data_source}")
 
     X, Y_metrics, y_validity, sources = [], [], [], []
     for d, refs in design_iter:
@@ -304,6 +423,7 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4):
 
     regressors = []
     test_r2 = {}
+    test_sigma = {}
     knn_r2 = {}
     for i, mname in enumerate(OUTPUT_METRICS):
         rf = RandomForestRegressor(n_estimators=n_estimators, random_state=SEED,
@@ -311,17 +431,20 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4):
         rf.fit(Xm_tr, Ym_tr[:, i])
         regressors.append(rf)
         y_pred = rf.predict(Xm_te)
+        residuals = Ym_te[:, i] - y_pred
         ss_tot = ((Ym_te[:, i] - Ym_te[:, i].mean()) ** 2).sum()
-        ss_res = ((Ym_te[:, i] - y_pred) ** 2).sum()
+        ss_res = (residuals ** 2).sum()
         r2 = 1 - ss_res / max(ss_tot, 1e-12)
+        sigma = float(np.std(residuals))
         knn = KNeighborsRegressor(n_neighbors=min(5, len(Xm_tr)-1)).fit(Xm_tr, Ym_tr[:, i])
         knn_pred = knn.predict(Xm_te)
         ss_res_k = ((Ym_te[:, i] - knn_pred) ** 2).sum()
         r2_k = 1 - ss_res_k / max(ss_tot, 1e-12)
         test_r2[mname] = float(r2)
+        test_sigma[mname] = sigma
         knn_r2[mname] = float(r2_k)
         verdict = "✓" if r2 > r2_k else "·"
-        print(f"  {mname:<22} R² = {r2:>+6.3f}   (KNN baseline {r2_k:>+6.3f}) {verdict}")
+        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}")
 
     mean_r2 = float(np.mean(list(test_r2.values())))
     mean_knn = float(np.mean(list(knn_r2.values())))
@@ -343,6 +466,7 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4):
             "family": family,
             "version": "0.1.0",
             "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "data_source": data_source or "unknown",
             "n_designs_total": int(len(X)),
             "n_valid": int(y_validity.sum()),
             "n_metrics_train": int(len(valid_in_tr)),
@@ -367,6 +491,7 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4):
         "eval": {
             "validity": val_meta,
             "metrics_test_r2": test_r2,
+            "metrics_test_sigma": test_sigma,
             "knn_baseline_r2": knn_r2,
             "mean_r2": mean_r2,
             "mean_knn_r2": mean_knn,
@@ -448,15 +573,27 @@ def main():
                    help="Trees per forest (default 150 — half of sklearn default for ~2x model size reduction with small R² hit)")
     p.add_argument("--decimals", type=int, default=4,
                    help="Float precision for tree thresholds and leaf values (default 4)")
+    p.add_argument("--since", default=None, metavar="YYYY-MM-DD",
+                   help="(vault-mode) only fetch designs created on/after this date")
+    p.add_argument("--limit", type=int, default=None,
+                   help="(vault-mode) cap on rows fetched, useful for quick test runs")
     args = p.parse_args()
 
     if args.from_files:
         design_iter = load_from_files(args.from_files, args.family)
+        data_source = f"files:{args.from_files}"
     else:
-        design_iter = load_from_vault(args.family)
+        design_iter = load_from_vault(args.family, since=args.since, limit=args.limit)
+        ds_parts = ["vault"]
+        if args.since:
+            ds_parts.append(f"since={args.since}")
+        if args.limit:
+            ds_parts.append(f"limit={args.limit}")
+        data_source = "+".join(ds_parts)
 
     train(args.family, design_iter, args.out,
-          n_estimators=args.n_estimators, decimals=args.decimals)
+          n_estimators=args.n_estimators, decimals=args.decimals,
+          data_source=data_source)
 
 
 if __name__ == "__main__":
