@@ -96,7 +96,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .pad-svg{display:block;width:100%;height:100%;border-radius:5px;background:#0a0d18}
 .pad-grid-line{stroke:#1a2030;stroke-width:0.5}
 .pad-axis-label{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:#7c8aaa;letter-spacing:0.04em;font-weight:500}
-.pad-corner-label{font-family:'IBM Plex Mono',monospace;font-size:10px;fill:#a0aac0;letter-spacing:0.04em;font-style:italic}
+.pad-corner-label{font-family:'IBM Plex Mono',monospace;font-size:9px;fill:#a0aac0;letter-spacing:0.04em;font-style:italic}
 .pad-dot-glow{fill:none;stroke:#c8f542;stroke-width:1.5;opacity:0.35}
 .pad-dot{fill:#0a1820;stroke:#c8f542;stroke-width:2}
 .pad-card.require .pad-dot{stroke:#FFB670}
@@ -962,10 +962,10 @@ function buildPadSVG(padId) {
       <line class="pad-grid-line" x1="${P}" y1="${H/2}" x2="${W-P}" y2="${H/2}"/>
       <line class="pad-grid-line" x1="${W/2}" y1="${P}" x2="${W/2}" y2="${H-P}"/>
       <rect x="${P}" y="${P}" width="${W-2*P}" height="${H-2*P}" fill="none" stroke="#1a2030" stroke-width="0.5"/>
-      <text class="pad-corner-label" x="${P+4}" y="${P+9}" text-anchor="start">${def.cornerLabels.tl}</text>
-      <text class="pad-corner-label" x="${W-P-4}" y="${P+9}" text-anchor="end">${def.cornerLabels.tr}</text>
-      <text class="pad-corner-label" x="${P+4}" y="${H-P-3}" text-anchor="start">${def.cornerLabels.bl}</text>
-      <text class="pad-corner-label" x="${W-P-4}" y="${H-P-3}" text-anchor="end">${def.cornerLabels.br}</text>
+      <text class="pad-corner-label" x="${P+4}" y="${P+9}" text-anchor="start"><tspan x="${P+4}">${def.cornerLabels.tl.split(' · ')[0]}</tspan><tspan x="${P+4}" dy="10">${def.cornerLabels.tl.split(' · ')[1]}</tspan></text>
+      <text class="pad-corner-label" x="${W-P-4}" y="${P+9}" text-anchor="end"><tspan x="${W-P-4}">${def.cornerLabels.tr.split(' · ')[0]}</tspan><tspan x="${W-P-4}" dy="10">${def.cornerLabels.tr.split(' · ')[1]}</tspan></text>
+      <text class="pad-corner-label" x="${P+4}" y="${H-P-13}" text-anchor="start"><tspan x="${P+4}">${def.cornerLabels.bl.split(' · ')[0]}</tspan><tspan x="${P+4}" dy="10">${def.cornerLabels.bl.split(' · ')[1]}</tspan></text>
+      <text class="pad-corner-label" x="${W-P-4}" y="${H-P-13}" text-anchor="end"><tspan x="${W-P-4}">${def.cornerLabels.br.split(' · ')[0]}</tspan><tspan x="${W-P-4}" dy="10">${def.cornerLabels.br.split(' · ')[1]}</tspan></text>
       <text class="pad-axis-label" x="${W/2}" y="${H-6}" text-anchor="middle">→ ${def.xLabel.toUpperCase()}</text>
       <text class="pad-axis-label" x="6" y="${H/2+3}" text-anchor="start" transform="rotate(-90, 6, ${H/2+3})">→ ${def.yLabel.toUpperCase()}</text>
       <circle class="pad-dot-glow" id="dotglow-${padId}" cx="0" cy="0" r="11"/>
