@@ -354,16 +354,38 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         print(f"Data source: {data_source}")
 
     X, Y_metrics, y_validity, sources = [], [], [], []
+    # Track validity-state and outlier counts so the load step is auditable.
+    n_outliers = 0
+    validity_counts = {}
     for d, refs in design_iter:
         try:
             X.append(encode_design_unified(d))
         except Exception as e:
             continue
-        is_valid = d["browser"].get("solver_validity") == "valid"
+        sv = d["browser"].get("solver_validity")
+        validity_counts[sv] = validity_counts.get(sv, 0) + 1
+        # "valid" rows have all axes from the solver. "partial" rows have one
+        # or more axes deliberately zeroed because connectivity check failed
+        # along that axis — that 0 is the correct answer for that axis, not
+        # missing data, so partial rows are usable training signal too.
+        is_valid = sv in ("valid", "partial")
         y_validity.append(1 if is_valid else 0)
         if is_valid:
             try:
-                Y_metrics.append(extract_outputs(d, refs))
+                outputs = extract_outputs(d, refs)
+                # FFT-CG axial-only solver naturally lands ratios up to ~1.10
+                # (no shear relaxation = ~10% over-estimation per axis).
+                # Threshold of 1.3 allows that physical noise + headroom but
+                # catches corrupted-row outliers (the ex_norm ~10× values that
+                # poisoned v0.1's Vault retraining).
+                ex_n, ey_n, ez_n = outputs[1], outputs[2], outputs[3]
+                keff_n = outputs[7]
+                if max(ex_n, ey_n, ez_n) > 1.3 or keff_n > 1.3:
+                    y_validity[-1] = 0
+                    Y_metrics.append([0.0] * len(OUTPUT_METRICS))
+                    n_outliers += 1
+                else:
+                    Y_metrics.append(outputs)
             except Exception:
                 # If we can't extract outputs (e.g. missing fields), drop from
                 # metrics training but keep in validity training set
@@ -380,8 +402,13 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         sys.exit(f"Only {len(X)} designs loaded — need at least 30 to train. "
                  "Run more sweeps or check the family filter.")
 
-    print(f"Designs loaded: {len(X)} ({int(y_validity.sum())} valid)")
+    print(f"Designs loaded: {len(X)} ({int(y_validity.sum())} usable for metric regression)")
     print(f"Feature dim: {X.shape[1]}")
+    if validity_counts:
+        breakdown = ", ".join(f"{k or 'null'}={v}" for k, v in sorted(validity_counts.items(), key=lambda kv: -kv[1]))
+        print(f"  solver_validity breakdown: {breakdown}")
+    if n_outliers > 0:
+        print(f"  Dropped {n_outliers} rows for normalized stiffness/thermal > 1.3 (likely data corruption)")
 
     # Split — stratified on validity if mixed, simple otherwise
     if 0.05 < y_validity.mean() < 0.95:
@@ -426,25 +453,46 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
     test_sigma = {}
     knn_r2 = {}
     for i, mname in enumerate(OUTPUT_METRICS):
+        # Per-metric NaN/inf filter. Most metrics are well-defined for both
+        # 'valid' and 'partial' rows, but anisotropy = max(E)/min(E) blows up
+        # to inf or NaN whenever a partial row has a zero-stiffness axis (the
+        # deliberate axis-zeroing from the FFT-CG connectivity check). Mask
+        # those rows out of THIS metric's train/test set without affecting
+        # any other metric's training.
+        tr_mask = np.isfinite(Ym_tr[:, i])
+        te_mask = np.isfinite(Ym_te[:, i])
+        n_drop = int((~tr_mask).sum() + (~te_mask).sum())
+        Xm_tr_i = Xm_tr[tr_mask]
+        Ym_tr_i = Ym_tr[tr_mask, i]
+        Xm_te_i = Xm_te[te_mask]
+        Ym_te_i = Ym_te[te_mask, i]
+        if len(Xm_tr_i) < 10 or len(Xm_te_i) < 2:
+            sys.exit(
+                f"Metric '{mname}' has too few finite labels after NaN/inf filtering "
+                f"(train={len(Xm_tr_i)}, test={len(Xm_te_i)}). "
+                f"Investigate the data — most metrics should not produce NaN."
+            )
+
         rf = RandomForestRegressor(n_estimators=n_estimators, random_state=SEED,
                                    max_depth=15, min_samples_leaf=2, n_jobs=-1)
-        rf.fit(Xm_tr, Ym_tr[:, i])
+        rf.fit(Xm_tr_i, Ym_tr_i)
         regressors.append(rf)
-        y_pred = rf.predict(Xm_te)
-        residuals = Ym_te[:, i] - y_pred
-        ss_tot = ((Ym_te[:, i] - Ym_te[:, i].mean()) ** 2).sum()
+        y_pred = rf.predict(Xm_te_i)
+        residuals = Ym_te_i - y_pred
+        ss_tot = ((Ym_te_i - Ym_te_i.mean()) ** 2).sum()
         ss_res = (residuals ** 2).sum()
         r2 = 1 - ss_res / max(ss_tot, 1e-12)
         sigma = float(np.std(residuals))
-        knn = KNeighborsRegressor(n_neighbors=min(5, len(Xm_tr)-1)).fit(Xm_tr, Ym_tr[:, i])
-        knn_pred = knn.predict(Xm_te)
-        ss_res_k = ((Ym_te[:, i] - knn_pred) ** 2).sum()
+        knn = KNeighborsRegressor(n_neighbors=min(5, len(Xm_tr_i)-1)).fit(Xm_tr_i, Ym_tr_i)
+        knn_pred = knn.predict(Xm_te_i)
+        ss_res_k = ((Ym_te_i - knn_pred) ** 2).sum()
         r2_k = 1 - ss_res_k / max(ss_tot, 1e-12)
         test_r2[mname] = float(r2)
         test_sigma[mname] = sigma
         knn_r2[mname] = float(r2_k)
         verdict = "✓" if r2 > r2_k else "·"
-        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}")
+        drop_note = f"   (dropped {n_drop} NaN/inf)" if n_drop > 0 else ""
+        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}{drop_note}")
 
     mean_r2 = float(np.mean(list(test_r2.values())))
     mean_knn = float(np.mean(list(knn_r2.values())))
@@ -482,7 +530,7 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         "input_norm": {"lo": in_lo.tolist(), "hi": in_hi.tolist()},
         "output_metrics": OUTPUT_METRICS,
         "output_ranges": {
-            m: {"min": float(Ym_tr[:, i].min()), "max": float(Ym_tr[:, i].max())}
+            m: {"min": float(np.nanmin(Ym_tr[:, i])), "max": float(np.nanmax(Ym_tr[:, i]))}
             for i, m in enumerate(OUTPUT_METRICS)
         },
         "validity_model": _serialize_rf_classifier(clf, decimals=decimals) if clf is not None else None,
