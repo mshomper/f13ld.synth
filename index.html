@@ -165,17 +165,19 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .rc-score-block .val.warn{color:#ffa028}
 .rc-score-block .rc-bell{flex-shrink:0;display:block}
 
-.rc-metrics{display:grid;grid-template-columns:1fr;gap:6px 18px;margin-bottom:10px}
-.rc-metric{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-family:'IBM Plex Mono',monospace;padding:2px 0}
-.rc-metric .m-name{color:#7c8aaa;letter-spacing:0.02em;display:flex;align-items:center;gap:6px}
+.rc-metrics{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;column-gap:14px;row-gap:6px;margin-bottom:10px;font-size:13px;font-family:'IBM Plex Mono',monospace}
+.rc-metric{display:contents}
+.rc-metric .m-marker{color:#7c8aaa;text-align:center;width:14px}
+.rc-metric .m-name{color:#7c8aaa;letter-spacing:0.02em;display:flex;align-items:center;gap:8px;min-width:0}
 .rc-metric .m-r2{font-size:10px;color:#3a4a70;padding:1px 5px;border:0.5px solid #2a3a5a;border-radius:2px;font-family:'IBM Plex Mono',monospace}
 .rc-metric .m-r2.high{color:#5BB892;border-color:rgba(91,184,146,0.4)}
 .rc-metric .m-r2.med{color:#4FB8C9;border-color:rgba(79,184,201,0.4)}
 .rc-metric .m-r2.low{color:#ffa028;border-color:rgba(255,160,40,0.4)}
+.rc-metric .m-z-col{display:flex;align-items:center;justify-content:flex-start}
 .rc-metric .m-z{font-size:10px;padding:1px 5px;border:0.5px solid;border-radius:2px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em}
-.rc-metric.rough .m-name{color:#5a6680}
+.rc-metric.rough .m-marker,.rc-metric.rough .m-name{color:#5a6680}
 .rc-metric.rough .m-vals{opacity:0.55}
-.rc-metric .m-vals{display:flex;align-items:center;gap:7px;color:#c0c8e0}
+.rc-metric .m-vals{display:flex;align-items:center;gap:7px;color:#c0c8e0;justify-content:flex-end}
 .rc-metric .m-pred{color:#e0e0ff;font-weight:500}
 .rc-metric .m-pred.unresolved{color:#7c8aaa;font-style:italic}
 .rc-metric .m-units{font-size:10px;color:#5a6680}
@@ -1116,7 +1118,7 @@ function buildResultCard(r, rank, targets) {
     const predDisplay = pNorm == null ? '—' : (pRes.isResolved ? formatVal(pRes.value, m.decimals) : formatVal(pNorm, m.decimals));
     const unitDisplay = pRes.isResolved ? pRes.unit : (m.norm_kind !== 'none' ? 'norm' : (m.unit || ''));
     const targMarker = targeted ? '◉' : '·';
-    metricsHTML += `<div class="rc-metric ${rough}"><span class="m-name">${targMarker} ${label} ${r2Tag}${zTag}</span><span class="m-vals"><span class="m-pred">${predDisplay}</span>${unitDisplay?`<span class="m-units">${unitDisplay}</span>`:''}</span></div>`;
+    metricsHTML += `<div class="rc-metric ${rough}"><span class="m-marker">${targMarker}</span><span class="m-name">${label} ${r2Tag}</span><span class="m-z-col">${zTag}</span><span class="m-vals"><span class="m-pred">${predDisplay}</span>${unitDisplay?`<span class="m-units">${unitDisplay}</span>`:''}</span></div>`;
   }
 
   card.innerHTML = `
