@@ -473,6 +473,18 @@ class SynthPredictor {
     const pipe_radius_raw = +x[off++].toFixed(3);
     const offset = +x[off++].toFixed(3);
 
+    // Geometry-level phase_shift (PI-TPMS pair offset). Read in encoder
+    // order, snap to eighths to match the sweep grid, then guard against
+    // (0,0,0) and (1/2,1/2,1/2) which both collapse to sheet geometry —
+    // nudge to (1/8, 0, 0), the simplest non-degenerate neighbor. Non-PI-TPMS
+    // recipes write phase_shift=null below, so this only matters when emitted.
+    let psx = snapEighth(x[off++]);
+    let psy = snapEighth(x[off++]);
+    let psz = snapEighth(x[off++]);
+    if (isTrivialPhaseShift(psx, psy, psz)) {
+      psx = 0.125; psy = 0; psz = 0;
+    }
+
     // Skip normal_weights (not in canonical recipe — the predictor learned them
     // as an input, but Mesh doesn't accept them as recipe state today)
     off += 3;
@@ -514,7 +526,7 @@ class SynthPredictor {
       mode,
       wall_thickness: mode === 'shell' ? wall_thickness_raw : null,
       pipe_radius:    mode === 'pi-tpms' ? pipe_radius_raw : null,
-      phase_shift: null,
+      phase_shift:    mode === 'pi-tpms' ? { x: psx, y: psy, z: psz } : null,
       gradient: { enabled: false }
     };
 
@@ -590,6 +602,20 @@ class SynthPredictor {
   }
 }
 function argmax(arr) { let mi = 0; for (let i = 1; i < arr.length; i++) if (arr[i] > arr[mi]) mi = i; return mi; }
+// Snap a continuous phase_shift component into the discrete eighth grid the
+// sweep tool uses. Wraps into [0, 1) so values that drift slightly past the
+// boundary during candidate perturbation come back to canonical form.
+function snapEighth(v) {
+  const snapped = Math.round(v * 8) / 8;
+  return ((snapped % 1) + 1) % 1;
+}
+// True when a snapped (x,y,z) phase_shift falls on either of the two
+// trivial points the sweep tool excludes — (0,0,0) and (1/2,1/2,1/2) —
+// because both collapse PI-TPMS to sheet geometry.
+function isTrivialPhaseShift(x, y, z) {
+  return (x === 0   && y === 0   && z === 0)
+      || (x === 0.5 && y === 0.5 && z === 0.5);
+}
 function gaussian01() {
   if (gaussian01._c !== undefined) { const v = gaussian01._c; gaussian01._c = undefined; return v; }
   const u1 = Math.random(), u2 = Math.random();
