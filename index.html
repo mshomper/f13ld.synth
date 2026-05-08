@@ -161,6 +161,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .rc-score-block .val.match{color:#7BD3E3}
 .rc-score-block .val.valid{color:#5BB892}
 .rc-score-block .val.warn{color:#ffa028}
+.rc-score-block .rc-bell{flex-shrink:0;display:block}
 
 .rc-metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 18px;margin-bottom:10px}
 .rc-metric{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-family:'IBM Plex Mono',monospace;padding:2px 0}
@@ -281,7 +282,7 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 
         <button id="searchBtn" onclick="runSearch()">
           Synthesize Designs
-          <span class="btn-sub">2,000 candidates · ranked by match × validity</span>
+          <span class="btn-sub">2,000 candidates · ranked by score × validity</span>
         </button>
       </div>
     </div>
@@ -414,6 +415,20 @@ class SynthPredictor {
     this.bundle = bundle; this.meta = bundle.meta; this.encoding = bundle.encoding;
     this.outputMetrics = bundle.output_metrics; this.outputRanges = bundle.output_ranges;
     this.metricsR2 = bundle.eval.metrics_test_r2;
+    // Per-metric residual sigma. Prefer explicit metrics_test_sigma if a future
+    // train_synth.py writes it; otherwise derive: sigma_y ~= range/4 (uniform proxy),
+    // sigma_resid = sigma_y * sqrt(1 - R2). Used as the yardstick for match scoring.
+    const explicitSigma = (bundle.eval && bundle.eval.metrics_test_sigma) || null;
+    this.outSigmas = {};
+    for (const k of this.outputMetrics) {
+      if (explicitSigma && explicitSigma[k] != null) {
+        this.outSigmas[k] = Math.max(explicitSigma[k], 1e-6);
+      } else {
+        const r2 = this.metricsR2 && this.metricsR2[k] != null ? this.metricsR2[k] : 0.5;
+        const rng = Math.max((this.outputRanges[k].max - this.outputRanges[k].min) || 1, 1e-8);
+        this.outSigmas[k] = Math.max((rng / 4) * Math.sqrt(Math.max(1 - r2, 0.05)), 1e-6);
+      }
+    }
     this.inLo = Float32Array.from(bundle.input_norm.lo);
     this.inHi = Float32Array.from(bundle.input_norm.hi);
     this.inSpan = new Float32Array(this.inLo.length);
@@ -520,7 +535,7 @@ class SynthPredictor {
   }
   async inverseSearch({ targetsNormalized, weights, n = 8, nCandidates = 2000 }) {
     const M = this.outputMetrics;
-    const ranges = M.map(k => Math.max((this.outputRanges[k].max - this.outputRanges[k].min) || 1, 1e-8));
+    const sigmas = M.map(k => this.outSigmas[k]);
     const aw = M.map(k => weights[k] || 0);
     const tw = aw.reduce((a,b)=>a+b, 0);
     if (tw === 0) return [];
@@ -533,20 +548,27 @@ class SynthPredictor {
       const val = this.predictValidity(x);
       if (val < 0.3) { vRej++; continue; }
       const pred = this.predictMetrics(x);
-      let dist = 0;
+      // Weighted-RMS z-score across active metrics. Each per-metric residual is
+      // measured in units of the model's residual sigma (derived from R2 + range),
+      // so the yardstick reflects what "close" actually means for THIS predictor.
+      let z2sum = 0;
       for (let j = 0; j < M.length; j++) {
         const w = aw[j]; if (w === 0) continue;
         const t = targetsNormalized[M[j]]; if (t == null) continue;
-        dist += (Math.abs(pred[M[j]] - t) / ranges[j]) * w;
+        const z = (pred[M[j]] - t) / sigmas[j];
+        z2sum += z * z * w;
       }
-      const match = Math.max(0, 1 - dist / tw);
-      cands.push({ x, predicted:pred, validity:val, match });
+      const zRms = Math.sqrt(z2sum / tw);
+      // Gaussian kernel exp(-z^2/6): hits the user-intuition targets of
+      // ~85% at 1 sigma, ~50% at 2 sigma, fading toward 0 beyond ~3 sigma.
+      const score = Math.exp(-(zRms * zRms) / 6);
+      cands.push({ x, predicted:pred, validity:val, zRms, score });
       if ((i & 0xFF) === 0xFF) await new Promise(r => setTimeout(r, 0));
     }
-    cands.sort((a,b) => (b.match * Math.sqrt(b.validity)) - (a.match * Math.sqrt(a.validity)));
+    cands.sort((a,b) => (b.score * Math.sqrt(b.validity)) - (a.score * Math.sqrt(a.validity)));
     console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
     return cands.slice(0, n).map(c => ({
-      metrics: c.predicted, match: c.match, validity: c.validity,
+      metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity,
       recipe: this.decodeRecipe(c.x), oodFlag: c.validity < 0.7
     }));
   }
@@ -557,6 +579,47 @@ function gaussian01() {
   const u1 = Math.random(), u2 = Math.random();
   const r = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))), theta = 2 * Math.PI * u2;
   gaussian01._c = r * Math.sin(theta); return r * Math.cos(theta);
+}
+
+// Traffic-light color ramp for the score sparkline dot. Anchors:
+//   z=0.0 -> #22c55e (green)        z=1.5 -> #f59e0b (amber)
+//   z=0.5 -> #84cc16 (lime)         z=2.0 -> #f97316 (orange)
+//   z=1.0 -> #eab308 (yellow)       z>=3.0 -> #dc2626 (red)
+function dotColorForZ(z) {
+  const STOPS = [
+    [0.0, [0x22, 0xc5, 0x5e]],
+    [0.5, [0x84, 0xcc, 0x16]],
+    [1.0, [0xea, 0xb3, 0x08]],
+    [1.5, [0xf5, 0x9e, 0x0b]],
+    [2.0, [0xf9, 0x73, 0x16]],
+    [3.0, [0xdc, 0x26, 0x26]]
+  ];
+  const az = Math.min(Math.max(Math.abs(z) || 0, 0), 3);
+  for (let i = 1; i < STOPS.length; i++) {
+    if (az <= STOPS[i][0]) {
+      const [z0, c0] = STOPS[i-1], [z1, c1] = STOPS[i];
+      const t = (az - z0) / (z1 - z0);
+      const r = Math.round(c0[0] + (c1[0]-c0[0])*t);
+      const g = Math.round(c0[1] + (c1[1]-c0[1])*t);
+      const b = Math.round(c0[2] + (c1[2]-c0[2])*t);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+  return 'rgb(220,38,38)';
+}
+
+// Bell-curve sparkline SVG. Curve y=exp(-x^2/6) sampled at 13 points, x in [-3,3]
+// mapped to screen [4,106]. Dot positioned at (zRms, exp(-zRms^2/6)) on the curve.
+// Polyline is precomputed in viewBox units; only the dot moves with zRms.
+function bellSparklineSVG(zRms) {
+  const z = Math.min(Math.max(Math.abs(zRms) || 0, 0), 3);
+  const xScr = 4 + (z + 3) * 17;
+  const yScr = 27 - 24 * Math.exp(-(z*z)/6);
+  const color = dotColorForZ(z);
+  return `<svg width="110" height="30" viewBox="0 0 110 30" class="rc-bell" aria-label="match score, ${z.toFixed(2)} sigma from target">`
+    + `<polyline points="4,22 12.5,19 21,15 29.5,10 38,7 46.5,4 55,3 63.5,4 72,7 80.5,10 89,15 97.5,19 106,22" fill="none" stroke="#6b7a9a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+    + `<circle cx="${xScr.toFixed(2)}" cy="${yScr.toFixed(2)}" r="4" fill="${color}"/>`
+    + `</svg>`;
 }
 
 const Predictor = {
@@ -999,7 +1062,7 @@ function renderResults({ results, reason }, targets) {
     body.innerHTML = `<div class="engine-empty">No candidates met the validity threshold. Try widening pad targets.</div>`;
     return;
   }
-  meta.innerHTML = `<b>${results.length} candidates</b> · ranked by match × validity`;
+  meta.innerHTML = `<b>${results.length} candidates</b> · ranked by score × validity`;
   body.innerHTML = '';
   const list = document.createElement('div'); list.className = 'results-list';
   results.forEach((r, i) => list.appendChild(buildResultCard(r, i+1, targets)));
@@ -1036,7 +1099,7 @@ function buildResultCard(r, rank, targets) {
         ${oodTag}
       </div>
       <div class="rc-scores">
-        <div class="rc-score-block"><span class="lbl">match</span><span class="val match">${(r.match*100).toFixed(0)}%</span></div>
+        <div class="rc-score-block"><span class="lbl">score</span>${bellSparklineSVG(r.zRms)}</div>
         <div class="rc-score-block"><span class="lbl">validity</span><span class="val ${r.validity < 0.85 ? 'warn' : 'valid'}">${(r.validity*100).toFixed(0)}%</span></div>
       </div>
     </div>
@@ -1067,7 +1130,7 @@ function handoffToMesh(rank) {
 function saveSynthToVault(rank) {
   const r = lastResults.synth[rank - 1];
   if (!r) return;
-  alert(`Synth result #${rank} would be ingested into F13LD.vault as a candidate.\n\nMatch: ${(r.match*100).toFixed(0)}%\nValidity: ${(r.validity*100).toFixed(0)}%\nMode: ${r.recipe.geometry.mode}\n${r.recipe.surface.terms.length} active terms`);
+  alert(`Synth result #${rank} would be ingested into F13LD.vault as a candidate.\n\nScore: z = ${r.zRms.toFixed(2)}σ (${(r.score*100).toFixed(0)}%)\nValidity: ${(r.validity*100).toFixed(0)}%\nMode: ${r.recipe.geometry.mode}\n${r.recipe.surface.terms.length} active terms`);
 }
 
 // ============================================================
