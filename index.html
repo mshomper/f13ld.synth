@@ -456,6 +456,25 @@ class SynthPredictor {
     }
     return x;
   }
+  // Cheap pre-flight check: would this feature vector decode to a recipe with
+  // either zero active terms or all-zero coefficients? Both produce phi=0
+  // everywhere, which under PI-TPMS or shell rendering yields a solid cube
+  // (max(|0|, |0|) < r is true everywhere, and |0| < t is too). Walks term
+  // offsets directly without invoking the full decode pipeline.
+  isDegenerateCandidate(x) {
+    const E = this.encoding;
+    const stride = 5 + E.max_factors * 8;
+    const baseOff = E.modes.length + 4 + 3 + 3;  // mode_oh + 4 scalars + 3 phase_shift + 3 normal_weights
+    let activeCount = 0, totalCoef = 0;
+    for (let t = 0; t < E.max_terms; t++) {
+      const tOff = baseOff + t * stride;
+      if (x[tOff] > 0.5) {
+        activeCount++;
+        totalCoef += Math.abs(x[tOff + 1]);
+      }
+    }
+    return activeCount === 0 || totalCoef < 0.001;
+  }
   decodeRecipe(x) {
     // Build a recipe in F13LD.mesh's canonical schema (verified against an
     // exported Vault recipe). Top-level shape: { meta, surface, geometry }.
@@ -521,7 +540,7 @@ class SynthPredictor {
 
     // Build geometry block with mode-specific fields nulled out where not applicable
     const geometry = {
-      offset,
+      offset:         mode === 'pi-tpms' ? null : offset,
       cell_scale,
       mode,
       wall_thickness: mode === 'shell' ? wall_thickness_raw : null,
@@ -553,12 +572,17 @@ class SynthPredictor {
     if (tw === 0) return [];
     const t0 = performance.now();
     const cands = [];
-    let scanned=0, vRej=0;
+    let scanned=0, vRej=0, dRej=0;
     for (let i = 0; i < nCandidates; i++) {
       scanned++;
       const x = this.sampleCandidate();
       const val = this.predictValidity(x);
       if (val < 0.3) { vRej++; continue; }
+      // Reject candidates whose feature vector would decode to a recipe with
+      // no usable surface (no active terms, or all coef=0 → phi=0 globally
+      // → renders as solid cube). Guards the result list before any prediction
+      // or decode work happens.
+      if (this.isDegenerateCandidate(x)) { dRej++; continue; }
       const pred = this.predictMetrics(x);
       // Weighted-RMS z-score across active metrics. Each per-metric residual is
       // measured in units of the model's residual sigma (derived from R2 + range),
@@ -594,7 +618,7 @@ class SynthPredictor {
         .join('  ·  ');
       console.info(`[F13LD.synth] Top candidate · score ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
     }
-    console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
+    console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${dRej} degenerate-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
     return cands.slice(0, n).map(c => ({
       metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity, zPerMetric: c.zPerMetric,
       recipe: this.decodeRecipe(c.x), oodFlag: c.validity < 0.7
