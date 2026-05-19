@@ -91,6 +91,16 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
 .pad-toggle button.active{background:rgba(79,184,201,0.18);color:#4FB8C9}
 .pad-toggle button.active.require{background:rgba(255,182,112,0.16);color:#FFB670}
 
+/* Connectivity filter row — multi-select toggle to constrain candidates by
+   predicted directionality (1, 2, or 3 connected axes). Same visual language
+   as pad require-state since it's a hard filter on results. */
+.connectivity-row{display:flex;align-items:center;gap:10px;padding:9px 11px;background:#0d1424;border:0.5px solid #1f2840;border-radius:9px;margin-bottom:8px}
+.connectivity-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7c8aaa;letter-spacing:0.08em;font-weight:500;text-transform:uppercase;flex-shrink:0}
+.connectivity-toggle{display:flex;background:#0a0d18;border:0.5px solid #1a2030;border-radius:14px;overflow:hidden;font-family:'IBM Plex Mono',monospace;margin-left:auto}
+.connectivity-toggle button{font-size:10px;padding:4px 11px;background:transparent;border:none;color:#5a6680;cursor:pointer;letter-spacing:0.06em;font-family:inherit;transition:background 0.12s,color 0.12s}
+.connectivity-toggle button:hover{color:#7c8aaa}
+.connectivity-toggle button.active{background:rgba(255,182,112,0.16);color:#FFB670}
+
 /* SVG pad */
 .pad-svg-wrap{position:relative;cursor:crosshair;user-select:none;-webkit-user-select:none}
 .pad-svg{display:block;width:100%;height:100%;border-radius:5px;background:#0a0d18}
@@ -279,6 +289,15 @@ select.mat-select:focus{outline:none;border-color:#4FB8C9}
           <select id="presetSel"><option value="">any preset</option><option value="gyroid">gyroid</option><option value="schwarzD">schwarzD</option><option value="schwarzP">schwarzP</option><option value="lidinoid">lidinoid</option><option value="frd">frd</option><option value="iwp">iwp</option><option value="Fischer-Koch S">Fischer-Koch S</option></select>
         </div>
 
+        <div class="connectivity-row">
+          <span class="connectivity-label">Connectivity</span>
+          <div class="connectivity-toggle" id="connectivityToggle">
+            <button data-axes="1" onclick="toggleConnectivity(1)">1 axis</button>
+            <button data-axes="2" onclick="toggleConnectivity(2)">2 axes</button>
+            <button data-axes="3" class="active" onclick="toggleConnectivity(3)">3 axes</button>
+          </div>
+        </div>
+
         <div class="pad-rack" id="padRack"></div>
 
         <button id="searchBtn" onclick="runSearch()">
@@ -362,7 +381,7 @@ const PAD_DEFS = [
     // When pad active, drive ey/ez along with ex (sets stiffness as a whole, not just one axis)
     coupledMetrics: ['ey_norm', 'ez_norm'],
     defaultPos: { x: 0.5, y: 0.5 },
-    defaultMode: 'prefer'
+    defaultMode: 'require'
   },
   {
     id: 'aniso_dist', title: 'Anisotropy × Pore Distribution',
@@ -370,7 +389,7 @@ const PAD_DEFS = [
     yMetric: 'pore_size_cv',     yLabel: 'Pore size CV',
     cornerLabels: { tl:'isotropic · varied', tr:'directional · varied', bl:'isotropic · uniform', br:'directional · uniform' },
     defaultPos: { x: 0.0, y: 0.0 },  // bottom-left → isotropic + uniform (foam-like)
-    defaultMode: 'prefer'
+    defaultMode: 'off'
   },
   {
     id: 'mass_thermal', title: 'Mass Efficiency × Thermal',
@@ -600,7 +619,7 @@ class SynthPredictor {
       geometry
     };
   }
-  async inverseSearch({ targetsNormalized, weights, n = 8, nCandidates = 2000 }) {
+  async inverseSearch({ targetsNormalized, weights, n = 8, nCandidates = 2000, connectivity = null }) {
     const M = this.outputMetrics;
     const sigmas = M.map(k => this.outSigmas[k]);
     const aw = M.map(k => weights[k] || 0);
@@ -608,7 +627,7 @@ class SynthPredictor {
     if (tw === 0) return [];
     const t0 = performance.now();
     const cands = [];
-    let scanned=0, vRej=0, dRej=0;
+    let scanned=0, vRej=0, dRej=0, cRej=0;
     for (let i = 0; i < nCandidates; i++) {
       scanned++;
       const x = this.sampleCandidate();
@@ -620,6 +639,16 @@ class SynthPredictor {
       // or decode work happens.
       if (this.isDegenerateCandidate(x)) { dRej++; continue; }
       const pred = this.predictMetrics(x);
+      // Connectivity filter: if user has restricted to specific connected-axis
+      // counts, classify the predicted directionality into a bucket (1/2/3 axes)
+      // and reject candidates outside the selected buckets. Discrete training
+      // labels are 0.333/0.667/1.0; threshold-based classification handles RF
+      // averaging that produces continuous values near these points.
+      if (connectivity && connectivity.size > 0 && connectivity.size < 3 && pred.directionality != null) {
+        const d = pred.directionality;
+        const bucket = d < 0.5 ? 1 : (d < 0.833 ? 2 : 3);
+        if (!connectivity.has(bucket)) { cRej++; continue; }
+      }
       // Weighted-RMS z-score across active metrics. Each per-metric residual is
       // measured in units of the model's residual sigma (derived from R2 + range),
       // so the yardstick reflects what "close" actually means for THIS predictor.
@@ -654,7 +683,7 @@ class SynthPredictor {
         .join('  ·  ');
       console.info(`[F13LD.synth] Top candidate · score ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
     }
-    console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${dRej} degenerate-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
+    console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${dRej} degenerate-rejected, ${cRej} connectivity-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
     return cands.slice(0, n).map(c => ({
       metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity, zPerMetric: c.zPerMetric,
       recipe: this.decodeRecipe(c.x), oodFlag: c.validity < 0.7
@@ -746,9 +775,9 @@ const Predictor = {
     catch(e) { this.loadError = e.message || String(e); console.info(`[F13LD.synth] No predictor for ${family}: ${this.loadError}`); }
     finally { this.loading = false; }
   },
-  async inverseSearch({ targetsNormalized, weights, n }) {
+  async inverseSearch({ targetsNormalized, weights, n, connectivity }) {
     if (!this.instance) return { results:[], reason:'no-model' };
-    return { results: await this.instance.inverseSearch({ targetsNormalized, weights, n }), reason:'ok' };
+    return { results: await this.instance.inverseSearch({ targetsNormalized, weights, n, connectivity }), reason:'ok' };
   }
 };
 
@@ -894,6 +923,33 @@ function loadPadState() {
   } catch(e) {}
 }
 function persistPadState() { try { localStorage.setItem(PADS_STORAGE_KEY, JSON.stringify(padState)); } catch(e) {} }
+
+// Connectivity filter: which directionality buckets (1/2/3 axes percolated)
+// are acceptable in results. Empty set = accept everything (filter disabled).
+const CONNECTIVITY_STORAGE_KEY = 'f13ld_synth_connectivity_v1';
+let connectivityState = new Set([3]);  // default: fully connected only
+function loadConnectivityState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONNECTIVITY_STORAGE_KEY) || 'null');
+    if (Array.isArray(saved)) connectivityState = new Set(saved.filter(n => [1,2,3].includes(n)));
+  } catch(e) {}
+}
+function persistConnectivityState() {
+  try { localStorage.setItem(CONNECTIVITY_STORAGE_KEY, JSON.stringify([...connectivityState])); } catch(e) {}
+}
+function toggleConnectivity(n) {
+  if (connectivityState.has(n)) connectivityState.delete(n);
+  else connectivityState.add(n);
+  persistConnectivityState();
+  syncConnectivityToggleUI();
+}
+function syncConnectivityToggleUI() {
+  const tg = document.getElementById('connectivityToggle');
+  if (!tg) return;
+  tg.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', connectivityState.has(parseInt(b.dataset.axes)));
+  });
+}
 
 // Map pad's normalized [0,1] position → metric value in metric's native units
 // (which for normalized metrics is the model's predicted normalized space)
@@ -1053,7 +1109,7 @@ function buildPadSVG(padId) {
       <text class="pad-corner-label" x="${P+4}" y="${H-P-13}" text-anchor="start"><tspan x="${P+4}">${def.cornerLabels.bl.split(' · ')[0]}</tspan><tspan x="${P+4}" dy="10">${def.cornerLabels.bl.split(' · ')[1]}</tspan></text>
       <text class="pad-corner-label" x="${W-P-4}" y="${H-P-13}" text-anchor="end"><tspan x="${W-P-4}">${def.cornerLabels.br.split(' · ')[0]}</tspan><tspan x="${W-P-4}" dy="10">${def.cornerLabels.br.split(' · ')[1]}</tspan></text>
       <text class="pad-axis-label" x="${W/2}" y="${H-6}" text-anchor="middle">→ ${def.xLabel.toUpperCase()}</text>
-      <text class="pad-axis-label" x="6" y="${H/2+3}" text-anchor="start" transform="rotate(-90, 6, ${H/2+3})">→ ${def.yLabel.toUpperCase()}</text>
+      <text class="pad-axis-label" x="14" y="${H/2+3}" text-anchor="start" transform="rotate(-90, 14, ${H/2+3})">→ ${def.yLabel.toUpperCase()}</text>
       <circle class="pad-dot-glow" id="dotglow-${padId}" cx="0" cy="0" r="11"/>
       <circle class="pad-dot" id="dot-${padId}" cx="0" cy="0" r="5"/>
     </svg>
@@ -1157,7 +1213,7 @@ async function runSearch() {
   const preset = document.getElementById('presetSel').value;
   const { targets, weights } = buildTargetsFromPads();
 
-  const synthRes = await Predictor.inverseSearch({ family, preset, targetsNormalized: targets, weights, n: 8 });
+  const synthRes = await Predictor.inverseSearch({ family, preset, targetsNormalized: targets, weights, n: 8, connectivity: connectivityState });
   renderResults(synthRes, targets);
   btn.disabled = false;
 }
@@ -1302,10 +1358,12 @@ function formatVal(v, d) { if (v == null || !isFinite(v)) return '—'; return v
 async function boot() {
   loadGlobalInputs();
   loadPadState();
+  loadConnectivityState();
   buildMaterialDropdown();
   syncMaterialCardToInputs();
   wireMaterialInputs();
   buildPadRack();
+  syncConnectivityToggleUI();
 
   const status = document.getElementById('dbStatus');
   if (status) { status.className = 'fh-status connecting'; status.textContent = 'loading…'; }
