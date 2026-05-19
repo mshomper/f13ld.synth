@@ -447,7 +447,7 @@ class SynthPredictor {
   }
   static async load(url) {
     const t0 = performance.now();
-    const res = await fetch(url, { cache: 'force-cache' });
+    const res = await fetch(url, { cache: 'default' });
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`);
     const bundle = await res.json();
     const p = new SynthPredictor(bundle);
