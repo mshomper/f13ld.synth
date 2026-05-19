@@ -343,11 +343,12 @@ const METRIC_DEFS = {
   ex_norm:            { label:'Stiffness Ex / Es',  labelAbs:'Stiffness Ex',       unit:'GPa',   decimals:2, min:0.005,max:0.5,   norm_kind:'modulus_es' },
   ey_norm:            { label:'Stiffness Ey / Es',  labelAbs:'Stiffness Ey',       unit:'GPa',   decimals:2, min:0.005,max:0.5,   norm_kind:'modulus_es' },
   ez_norm:            { label:'Stiffness Ez / Es',  labelAbs:'Stiffness Ez',       unit:'GPa',   decimals:2, min:0.005,max:0.5,   norm_kind:'modulus_es' },
-  anisotropy:         { label:'Anisotropy',         labelAbs:'Anisotropy',         unit:'×',     decimals:2, min:1,    max:3,     norm_kind:'none' },
-  pore_size_norm:     { label:'Mean pore φ / cell', labelAbs:'Mean pore φ',        unit:'µm',    decimals:2, min:0.1,  max:0.9,   norm_kind:'cell_length' },
+  anisotropy:         { label:'Anisotropy',         labelAbs:'Anisotropy',         unit:'×',     decimals:2, min:1,    max:5,     norm_kind:'none' },
+  pore_size_p50_norm: { label:'Median pore φ / cell', labelAbs:'Median pore φ',      unit:'µm',    decimals:2, min:0.04, max:0.5,   norm_kind:'cell_length' },
   pore_size_cv:       { label:'Pore size CV',       labelAbs:'Pore size CV',       unit:'',      decimals:2, min:0.4,  max:0.9,   norm_kind:'none' },
   keff_avg_norm:      { label:'Thermal cond / ks',  labelAbs:'Thermal cond avg',   unit:'W/mK',  decimals:3, min:0.005,max:0.4,   norm_kind:'thermal_ks' },
   surface_complexity: { label:'Surface complexity', labelAbs:'Surface complexity', unit:'',      decimals:2, min:1,    max:1.5,   norm_kind:'none' },
+  directionality:     { label:'Directionality',     labelAbs:'Axes percolated',    unit:'/3',    decimals:2, min:0.33, max:1.0,   norm_kind:'none' },
 };
 
 // Three pads, each defining an X/Y pair plus optional auxiliary metrics
@@ -356,7 +357,7 @@ const PAD_DEFS = [
   {
     id: 'mech_pore', title: 'Mechanics × Pore',
     xMetric: 'ex_norm',          xLabel: 'Stiffness',
-    yMetric: 'pore_size_norm',   yLabel: 'Pore size',
+    yMetric: 'pore_size_p50_norm',   yLabel: 'Pore size',
     cornerLabels: { tl:'compliant · large pores', tr:'stiff · large pores', bl:'compliant · tight pores', br:'stiff · tight pores' },
     // When pad active, drive ey/ez along with ex (sets stiffness as a whole, not just one axis)
     coupledMetrics: ['ey_norm', 'ez_norm'],
@@ -435,7 +436,14 @@ class SynthPredictor {
     for (let i = 0; i < this.inLo.length; i++) this.inSpan[i] = Math.max(this.inHi[i] - this.inLo[i], 1e-8);
     this.seedSamples = bundle.seed_samples.map(s => Float32Array.from(s));
     this.validityRF = bundle.validity_model ? new RandomForest(bundle.validity_model.trees) : null;
-    this.metricsRFs = bundle.metrics_model.map(m => new RandomForest(m.trees));
+    this.metricsRFs = bundle.metrics_model.map(m => {
+      // Discriminate: derived metrics carry an op spec; trained metrics carry trees.
+      // Missing kind defaults to 'trained' (backward compat with older bundles).
+      if (m && m.kind === 'derived') {
+        return { kind: 'derived', op: m.op, inputs: m.inputs, floor: m.floor };
+      }
+      return { kind: 'trained', rf: new RandomForest(m.trees) };
+    });
   }
   static async load(url) {
     const t0 = performance.now();
@@ -446,7 +454,35 @@ class SynthPredictor {
     console.info(`[F13LD.synth] Predictor loaded in ${((performance.now()-t0)/1000).toFixed(1)}s · ${p.meta.family} v${p.meta.version} · ${p.meta.n_valid} valid samples`);
     return p;
   }
-  predictMetrics(x) { const out = {}; for (let i = 0; i < this.outputMetrics.length; i++) out[this.outputMetrics[i]] = this.metricsRFs[i].predict(x); return out; }
+  predictMetrics(x) {
+    // Two-pass: trained metrics first, then derived (which read trained outputs).
+    // Anything more layered (derived-on-derived) would need a topological sort,
+    // but the current schema only supports one level.
+    const out = {};
+    for (let i = 0; i < this.outputMetrics.length; i++) {
+      const m = this.metricsRFs[i];
+      if (m.kind === 'trained') {
+        out[this.outputMetrics[i]] = m.rf.predict(x);
+      }
+    }
+    for (let i = 0; i < this.outputMetrics.length; i++) {
+      const m = this.metricsRFs[i];
+      if (m.kind === 'derived') {
+        out[this.outputMetrics[i]] = this._applyDerivedOp(m, out);
+      }
+    }
+    return out;
+  }
+  _applyDerivedOp(spec, predictions) {
+    const vals = spec.inputs.map(name => predictions[name]);
+    if (spec.op === 'max_over_min') {
+      const floor = spec.floor ?? 0.01;
+      const mx = Math.max.apply(null, vals);
+      const mn = Math.max(Math.min.apply(null, vals), floor);
+      return mx / mn;
+    }
+    throw new Error(`Unknown derived op: ${spec.op}`);
+  }
   predictValidity(x) { return this.validityRF ? this.validityRF.predict(x) : 1.0; }
   sampleCandidate(sigmaFrac = 0.05) {
     const seed = this.seedSamples[(Math.random() * this.seedSamples.length) | 0];
