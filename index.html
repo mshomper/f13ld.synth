@@ -628,6 +628,7 @@ class SynthPredictor {
     const t0 = performance.now();
     const cands = [];
     let scanned=0, vRej=0, dRej=0, cRej=0;
+    const bucketCounts = {1: 0, 2: 0, 3: 0};
     for (let i = 0; i < nCandidates; i++) {
       scanned++;
       const x = this.sampleCandidate();
@@ -639,15 +640,16 @@ class SynthPredictor {
       // or decode work happens.
       if (this.isDegenerateCandidate(x)) { dRej++; continue; }
       const pred = this.predictMetrics(x);
-      // Connectivity filter: if user has restricted to specific connected-axis
-      // counts, classify the predicted directionality into a bucket (1/2/3 axes)
-      // and reject candidates outside the selected buckets. Discrete training
-      // labels are 0.333/0.667/1.0; threshold-based classification handles RF
-      // averaging that produces continuous values near these points.
-      if (connectivity && connectivity.size > 0 && connectivity.size < 3 && pred.directionality != null) {
+      // Connectivity filter: classify the predicted directionality into a
+      // bucket (1/2/3 axes connected) and reject candidates outside the
+      // selected bucket. Discrete training labels are 0.333/0.667/1.0;
+      // threshold-based classification handles RF averaging that produces
+      // continuous values near these points. Always-on in single-select mode.
+      if (connectivity != null && pred.directionality != null) {
         const d = pred.directionality;
         const bucket = d < 0.5 ? 1 : (d < 0.833 ? 2 : 3);
-        if (!connectivity.has(bucket)) { cRej++; continue; }
+        bucketCounts[bucket]++;
+        if (bucket !== connectivity) { cRej++; continue; }
       }
       // Weighted-RMS z-score across active metrics. Each per-metric residual is
       // measured in units of the model's residual sigma (derived from R2 + range),
@@ -684,6 +686,9 @@ class SynthPredictor {
       console.info(`[F13LD.synth] Top candidate · score ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
     }
     console.info(`[F13LD.synth] Inverse search: ${scanned} sampled, ${vRej} validity-rejected, ${dRej} degenerate-rejected, ${cRej} connectivity-rejected, ${cands.length} scored in ${((performance.now()-t0)/1000).toFixed(2)}s`);
+    if (connectivity != null) {
+      console.info(`[F13LD.synth] Connectivity bucket distribution (predicted): 1-axis=${bucketCounts[1]}, 2-axis=${bucketCounts[2]}, 3-axis=${bucketCounts[3]} (filter: ${connectivity}-axis)`);
+    }
     return cands.slice(0, n).map(c => ({
       metrics: c.predicted, zRms: c.zRms, score: c.score, validity: c.validity, zPerMetric: c.zPerMetric,
       recipe: this.decodeRecipe(c.x), oodFlag: c.validity < 0.7
@@ -924,22 +929,25 @@ function loadPadState() {
 }
 function persistPadState() { try { localStorage.setItem(PADS_STORAGE_KEY, JSON.stringify(padState)); } catch(e) {} }
 
-// Connectivity filter: which directionality buckets (1/2/3 axes percolated)
-// are acceptable in results. Empty set = accept everything (filter disabled).
+// Connectivity filter: which directionality bucket (1, 2, or 3 connected axes)
+// the search results MUST match. Single-select — always exactly one bucket
+// active, since "force N-axis connectivity" is a single constraint.
 const CONNECTIVITY_STORAGE_KEY = 'f13ld_synth_connectivity_v1';
-let connectivityState = new Set([3]);  // default: fully connected only
+let connectivityState = 3;  // default: force fully connected
 function loadConnectivityState() {
   try {
     const saved = JSON.parse(localStorage.getItem(CONNECTIVITY_STORAGE_KEY) || 'null');
-    if (Array.isArray(saved)) connectivityState = new Set(saved.filter(n => [1,2,3].includes(n)));
+    if ([1,2,3].includes(saved)) connectivityState = saved;
   } catch(e) {}
 }
 function persistConnectivityState() {
-  try { localStorage.setItem(CONNECTIVITY_STORAGE_KEY, JSON.stringify([...connectivityState])); } catch(e) {}
+  try { localStorage.setItem(CONNECTIVITY_STORAGE_KEY, JSON.stringify(connectivityState)); } catch(e) {}
 }
 function toggleConnectivity(n) {
-  if (connectivityState.has(n)) connectivityState.delete(n);
-  else connectivityState.add(n);
+  // Single-select: clicking sets the active bucket. No deselect — exactly one
+  // constraint is always in effect, matching "force N-axis connectivity" intent.
+  if (![1,2,3].includes(n)) return;
+  connectivityState = n;
   persistConnectivityState();
   syncConnectivityToggleUI();
 }
@@ -947,7 +955,7 @@ function syncConnectivityToggleUI() {
   const tg = document.getElementById('connectivityToggle');
   if (!tg) return;
   tg.querySelectorAll('button').forEach(b => {
-    b.classList.toggle('active', connectivityState.has(parseInt(b.dataset.axes)));
+    b.classList.toggle('active', parseInt(b.dataset.axes) === connectivityState);
   });
 }
 
