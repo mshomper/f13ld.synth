@@ -23,7 +23,7 @@ const intents = [
 const N = 36, rows = [];
 intents.forEach((targets, ii) => {
   const weights = Object.fromEntries(Object.keys(targets).map(k => [k, 1]));
-  const r = SS.run(ctx, { phase: 'explore', count: 800, rngSeed: 11 + ii, targets, weights, connectivity: null, presetKey: null, keep: 6 });
+  const r = SS.run(ctx, { parents: ctx.seeds.map(s => ({ design: s.design, seedIndex: s.index })), count: 800, strength: 0.06, rngSeed: 11 + ii, targets, weights, connectivity: null, keep: 6 });
   for(const c of r.candidates.slice(0, 4)){
     const recipe = SE.toRecipe(c.design, { presetKey: c.presetKey });
     const sdf = sandbox.buildTPMSSDF(recipe);

@@ -51,50 +51,32 @@ const Predictor = {
       .sort((a, b) => b.n - a.n);
   },
 
-  // req: {targets, weights, connectivity, presetKey}, onProgress(text)
-  async inverseSearch(req, onProgress){
+  // req: {targets, weights, connectivity, presetKey, grid, ptsKeys}
+  // opts: {depth: 'quick'|'wide'|'deep', onRound(info), shouldStop()}
+  async inverseSearch(req, opts){
     if(!this.loaded) return { results: [], reason: 'no-model' };
-    const B = SEARCH_BUDGET, t0 = performance.now();
-    const base = Object.assign({ keep: B.keepPerJob }, req);
-    const seed0 = (Math.random() * 1e9) | 0;
-    const nJobs = this.pool ? this.pool.size : 1;
-
-    onProgress && onProgress(`exploring ${B.explore.toLocaleString()} designs`);
-    const exploreJobs = [];
-    const share = Math.ceil(B.explore / nJobs);
-    for(let j = 0; j < nJobs; j++)
-      exploreJobs.push(Object.assign({}, base, { phase: 'explore', count: share, rngSeed: seed0 + j }));
-    const ex = await this.runJobs(exploreJobs);
-
-    let all = [], stats = null;
-    for(const r of ex){ all = all.concat(r.candidates); stats = SynthSearch.mergeStats(stats, r.stats); }
-    const parents = SynthSearch.pickFinal(all, B.refineParents, 3).map(c => ({ design: c.design, seedIndex: c.seedIndex }));
-
-    if(parents.length){
-      onProgress && onProgress(`refining the best ${parents.length}`);
-      const refineJobs = [];
-      for(let j = 0; j < nJobs; j++){
-        const mine = parents.filter((_, i) => i % nJobs === j);
-        if(mine.length) refineJobs.push(Object.assign({}, base, { phase: 'refine', parents: mine, count: B.refinePerParent, rngSeed: seed0 + 1000 + j }));
-      }
-      const rf = await this.runJobs(refineJobs);
-      for(const r of rf){ all = all.concat(r.candidates); stats = SynthSearch.mergeStats(stats, r.stats); }
-    }
-
-    const final = SynthSearch.pickFinal(all, B.results, B.perSeed);
-    const secs = (performance.now() - t0) / 1000;
-    if(final.length){
-      const top = final[0];
+    opts = opts || {};
+    const depth = SEARCH_DEPTHS[opts.depth] || SEARCH_DEPTHS[DEFAULT_DEPTH];
+    const W = this.pool ? this.pool.size : 1;
+    const res = await SynthSearch.coordinate({
+      ctx: this.ctx, req, seconds: depth.seconds, workers: W,
+      perWorker: this.pool ? SEARCH_PER_WORKER : SEARCH_PER_WORKER_MAIN, plateauRounds: depth.patience,
+      runJobs: jobs => this.runJobs(jobs),
+      onRound: opts.onRound, shouldStop: opts.shouldStop,
+      now: () => performance.now()
+    });
+    if(res.final.length){
+      const top = res.final[0];
       const zStr = Object.entries(top.zPerMetric).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
         .map(([k, z]) => `${k}: ${z >= 0 ? '+' : ''}${z.toFixed(2)}σ`).join('  ·  ');
-      console.info(`[F13LD.synth] Top candidate · score ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
+      console.info(`[F13LD.synth] Top candidate · match ${(top.score*100).toFixed(0)}% · zRMS ${top.zRms.toFixed(2)} · ${zStr}`);
     }
-    if(stats){
-      console.info(`[F13LD.synth] Search: ${stats.scanned} scored on ${nJobs} ${this.pool ? 'workers' : 'thread (main)'} in ${secs.toFixed(2)}s · ${stats.validity} validity-rejected · ${stats.degenerate} degenerate · ${stats.connectivity} connectivity-rejected`);
-      if(req.connectivity != null)
-        console.info(`[F13LD.synth] Connectivity buckets (predicted): 1-axis=${stats.buckets[1]}, 2-axis=${stats.buckets[2]}, 3-axis=${stats.buckets[3]} (filter: ${req.connectivity}-axis)`);
+    if(res.stats){
+      const st = res.stats;
+      console.info(`[F13LD.synth] Search (${depth.label}): ${st.scanned.toLocaleString()} designs in ${res.rounds} rounds on ${W} ${this.pool ? 'workers' : 'thread (main)'} · ${res.seconds.toFixed(1)}s · ended: ${res.reason} · ${st.validity} validity-rejected · ${st.degenerate} degenerate · ${st.connectivity} off-connectivity`);
     }
-    return { results: final.map(c => this.toResult(c)), reason: 'ok', stats, seconds: secs, workers: this.pool ? nJobs : 0 };
+    return { results: res.final.map(c => this.toResult(c)), reason: res.final.length ? 'ok' : (res.reason === 'empty-preset' ? 'empty-preset' : 'none'),
+             stats: res.stats, rounds: res.rounds, seconds: res.seconds, ended: res.reason, workers: this.pool ? W : 0 };
   },
 
   async runJobs(jobs){
@@ -102,24 +84,11 @@ const Predictor = {
       try { return await this.pool.runAll(jobs); }
       catch(e){ console.warn('[F13LD.synth] Worker search failed, falling back to the main thread:', e.message); this.pool.terminate(); this.pool = null; }
     }
+    // Main-thread fallback: one job at a time, yielding between them.
     const out = [];
     for(const job of jobs){
-      // Main-thread fallback: run in slices so the page stays responsive.
-      const slice = 250, parts = [];
-      if(job.phase === 'explore'){
-        for(let done = 0; done < job.count; done += slice){
-          parts.push(SynthSearch.run(this.ctx, Object.assign({}, job, { count: Math.min(slice, job.count - done), rngSeed: job.rngSeed + done })));
-          await new Promise(r => setTimeout(r, 0));
-        }
-      } else {
-        for(let i = 0; i < job.parents.length; i++){
-          parts.push(SynthSearch.run(this.ctx, Object.assign({}, job, { parents: [job.parents[i]], rngSeed: job.rngSeed + i })));
-          await new Promise(r => setTimeout(r, 0));
-        }
-      }
-      let cands = [], stats = null;
-      for(const p of parts){ cands = cands.concat(p.candidates); stats = SynthSearch.mergeStats(stats, p.stats); }
-      out.push({ candidates: SynthSearch.topK(cands, job.keep), stats });
+      out.push(SynthSearch.run(this.ctx, job));
+      await new Promise(r => setTimeout(r, 0));
     }
     return out;
   },
@@ -167,7 +136,7 @@ const SearchPool = {
     if(typeof Worker === 'undefined') return null;
     const cores = navigator.hardwareConcurrency || 4;
     const phone = window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-    const size = Math.max(1, Math.min(phone ? 2 : 8, cores - 1));
+    const size = Math.max(1, Math.min(phone ? 2 : 15, cores - 1));   // all threads but one
     const workers = [];
     try {
       for(let i = 0; i < size; i++) workers.push(makeSearchWorker());

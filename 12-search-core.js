@@ -181,7 +181,20 @@ const SynthSearch = (function(){
     const zRms = tw > 0 ? Math.sqrt(z2 / tw) : 0;
     const score = Math.exp(-(zRms * zRms) / 6);
     const spreadRatio = sw > 0 ? sr / sw : 1;
-    const conf = 1 / (1 + 0.35 * Math.max(0, spreadRatio - 1));
+    return finish(d, validity, pred, spread, zPerMetric, zRms, score, spreadRatio);
+  }
+
+  // Rank = match × √validity × confidence factor. Wider searches drift toward
+  // designs where the forest disagrees with itself (likely model error), so
+  // the factor is flat inside the training spread and falls off steeply past
+  // it, with an extra cut for low confidence (Matt, 2026-10-09).
+  function confidenceFactor(ratio){
+    let f = ratio <= 1.25 ? 1 : 1 / (1 + 0.8 * (ratio - 1.25));
+    if(ratio > 2) f *= 0.7;
+    return f;
+  }
+  function finish(d, validity, pred, spread, zPerMetric, zRms, score, spreadRatio){
+    const conf = confidenceFactor(spreadRatio);
     return { design: d, validity, pred, spread, zPerMetric, zRms, score, spreadRatio,
              rank: score * Math.sqrt(validity) * conf };
   }
@@ -199,37 +212,114 @@ const SynthSearch = (function(){
     return out;
   }
 
-  // One unit of work. req:
-  //   targets, weights, connectivity, presetKey (null = any)
-  //   phase 'explore': count candidates grown from random seeds
-  //   phase 'refine' : parents [{design, seedIndex}], count per parent
+  // ── One job (a worker's share of a round) ─────────────────────────────────
+  // req:
+  //   targets, weights, connectivity
+  //   parents   [{design, seedIndex, seed?}]  seed:true → also score it unchanged
+  //   count     designs to grow from the parents
+  //   strength  mutation step (fraction of each parameter's training range)
+  //   grid      {kx, ky, x0, x1, y0, y1, n}  map cells kept for diversity
+  //   ptsKeys   metrics to report for every scored design (the result map)
+  //   keep      best-by-rank to return
+  // Returns the best `keep`, the best design per map cell, the map points
+  // (ptsKeys values per scored design, flat Float32Array) and counts.
   function run(ctx, req){
     const R = rng(req.rngSeed || 1);
     const stats = { scanned: 0, validity: 0, degenerate: 0, connectivity: 0, buckets: { 1: 0, 2: 0, 3: 0 } };
-    const out = [];
-    const push = (c, seedIndex) => { if(c){ c.seedIndex = seedIndex; c.presetKey = ctx.seeds[seedIndex].presetKey; out.push(c); } };
-    if(req.phase === 'refine'){
-      for(const p of req.parents){
-        const seed = ctx.seeds[p.seedIndex];
-        const range = ctx.ranges[p.design.mode] || {};
-        for(let i = 0; i < req.count; i++){
-          stats.scanned++;
-          push(scoreCandidate(ctx, req, mutate(p.design, R, REFINE_STRENGTH, range), stats), seed.index);
+    const keys = req.ptsKeys || [], nk = keys.length;
+    const pts = new Float32Array((req.count + req.parents.length) * nk);
+    let np = 0;
+    const out = [], cells = new Map(), g = req.grid;
+    const push = (c, seedIndex) => {
+      if(!c) return;
+      c.seedIndex = seedIndex; c.presetKey = ctx.seeds[seedIndex].presetKey;
+      out.push(c);
+      for(let k = 0; k < nk; k++) pts[np * nk + k] = c.pred[keys[k]];
+      np++;
+      if(g){
+        const gx = Math.floor((c.pred[g.kx] - g.x0) / (g.x1 - g.x0) * g.n);
+        const gy = Math.floor((c.pred[g.ky] - g.y0) / (g.y1 - g.y0) * g.n);
+        if(gx >= 0 && gx < g.n && gy >= 0 && gy < g.n){
+          const cell = gy * g.n + gx, o = cells.get(cell);
+          if(!o || c.rank > o.rank) cells.set(cell, c);
         }
       }
-    } else {
-      const pool = req.presetKey ? ctx.seeds.filter(s => s.presetKey === req.presetKey) : ctx.seeds;
-      if(!pool.length) return { candidates: [], stats };
-      for(let i = 0; i < req.count; i++){
-        stats.scanned++;
-        const seed = pool[Math.floor(R() * pool.length)];
-        const range = ctx.ranges[seed.design.mode] || {};
-        // A small share are the training seeds themselves: real, solved designs.
-        const d = (R() < 0.05) ? SE.cloneDesign(seed.design) : mutate(seed.design, R, EXPLORE_STRENGTH, range);
-        push(scoreCandidate(ctx, req, d, stats), seed.index);
-      }
+    };
+    const P = req.parents;
+    if(!P.length) return { candidates: [], cells: [], pts: new Float32Array(0), stats };
+    for(const p of P){
+      if(!p.seed) continue;
+      stats.scanned++;
+      push(scoreCandidate(ctx, req, SE.cloneDesign(p.design), stats), p.seedIndex);
     }
-    return { candidates: topK(out, req.keep || 48), stats };
+    for(let i = 0; i < req.count; i++){
+      stats.scanned++;
+      const p = P[Math.floor(R() * P.length)];
+      push(scoreCandidate(ctx, req, mutate(p.design, R, req.strength, ctx.ranges[p.design.mode] || {}), stats), p.seedIndex);
+    }
+    return { candidates: topK(out, req.keep || 48), cells: [...cells.entries()],
+             pts: pts.slice(0, np * nk), stats };
+  }
+
+  // ── Coordinator: rounds until the time budget, a plateau or Stop ──────────
+  // Each round grows designs from (a) the best found so far and (b) the best
+  // design in every filled cell of the map, so it both closes in on the
+  // target and keeps alternatives spread across the map. The mutation step
+  // starts wide and narrows each round. Runs anywhere: opts.runJobs does the
+  // work (a worker pool, or the main thread), opts.onRound reports progress.
+  //   opts: {ctx, req, seconds, workers, perWorker, plateauRounds, runJobs, onRound, shouldStop, now, rand}
+  const ROUND = { start: 0.12, floor: 0.025, decay: 0.78, parents: 48, eliteKeep: 64,
+                  plateauRounds: 3, plateauGain: 0.005, minRounds: 4 };
+  async function coordinate(opts){
+    const { ctx, req } = opts;
+    const now = opts.now || (() => Date.now());
+    const rand = opts.rand || Math.random;
+    const t0 = now(), budget = opts.seconds * 1000, W = Math.max(1, opts.workers || 1);
+    const pool = req.presetKey ? ctx.seeds.filter(s => s.presetKey === req.presetKey) : ctx.seeds;
+    if(!pool.length) return { final: [], stats: null, rounds: 0, scanned: 0, reason: 'empty-preset' };
+    let elites = [], stats = null, history = [], round = 0, reason = 'time';
+    const archive = new Map();
+    let parents = pool.map(s => ({ design: s.design, seedIndex: s.index, seed: true }));
+    while(true){
+      const strength = Math.max(ROUND.floor, ROUND.start * Math.pow(ROUND.decay, round));
+      const jobs = [];
+      for(let j = 0; j < W; j++){
+        // Seeds are scored unchanged once, split across the jobs.
+        const mine = round === 0 ? parents.map((p, i) => i % W === j ? p : Object.assign({}, p, { seed: false })) : parents;
+        jobs.push(Object.assign({}, req, { parents: mine, count: opts.perWorker, strength,
+          rngSeed: ((rand() * 2147483647) | 0) + 1, keep: 48 }));
+      }
+      const results = await opts.runJobs(jobs);
+      let fresh = [], pts = [];
+      for(const r of results){
+        fresh = fresh.concat(r.candidates);
+        for(const [cell, c] of r.cells){ const o = archive.get(cell); if(!o || c.rank > o.rank) archive.set(cell, c); }
+        pts.push(r.pts);
+        stats = mergeStats(stats, r.stats);
+      }
+      elites = topK(elites.concat(fresh), ROUND.eliteKeep);
+      const final = pickFinal(elites.concat([...archive.values()]), 8, 2);
+      const mean = final.length ? final.reduce((a, c) => a + c.score, 0) / final.length : 0;
+      history.push(mean);
+      round++;
+      const elapsed = now() - t0;
+      if(opts.onRound) opts.onRound({ round, elapsed, scanned: stats.scanned, final, mean, pts, strength, cells: archive.size });
+      if(opts.shouldStop && opts.shouldStop()){ reason = 'stopped'; break; }
+      if(elapsed >= budget){ reason = 'time'; break; }
+      const patience = opts.plateauRounds || ROUND.plateauRounds;
+      if(round >= ROUND.minRounds && strength <= ROUND.floor + 1e-9 && history.length > patience){
+        const before = history[history.length - 1 - patience];
+        if(mean - before < ROUND.plateauGain){ reason = 'settled'; break; }
+      }
+      // Next parents: half from the best so far, half from the map's cells.
+      const cellsArr = [...archive.values()];
+      const best = elites.slice(0, Math.ceil(ROUND.parents / 2));
+      const spread = [];
+      for(let i = 0; i < ROUND.parents - best.length && cellsArr.length; i++) spread.push(cellsArr[Math.floor(rand() * cellsArr.length)]);
+      parents = best.concat(spread).map(c => ({ design: c.design, seedIndex: c.seedIndex }));
+    }
+    const final = pickFinal(elites.concat([...archive.values()]), 8, 2);
+    return { final, stats, rounds: round, scanned: stats ? stats.scanned : 0, reason, seconds: (now() - t0) / 1000 };
   }
 
   // Context from the init message. init.model is SynthForest.toMessage()
@@ -280,9 +370,9 @@ const SynthSearch = (function(){
   // Confidence label from the tree-spread ratio.
   function confidenceLabel(ratio){ return ratio <= 1.25 ? 'high' : ratio <= 2 ? 'medium' : 'low'; }
 
-  return { rng, buildSeedTable, mutate, scoreCandidate, topK, run, makeContext,
-           sigmasFromBundle, pickFinal, mergeStats, confidenceLabel,
-           EXPLORE_STRENGTH, REFINE_STRENGTH, VALIDITY_FLOOR };
+  return { rng, buildSeedTable, mutate, scoreCandidate, topK, run, coordinate, makeContext,
+           sigmasFromBundle, pickFinal, mergeStats, confidenceLabel, confidenceFactor,
+           EXPLORE_STRENGTH, REFINE_STRENGTH, VALIDITY_FLOOR, ROUND };
 })();
 
 if(typeof module !== 'undefined') module.exports = SynthSearch;

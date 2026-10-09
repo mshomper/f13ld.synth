@@ -5,7 +5,7 @@
    ============================================================ */
 'use strict';
 
-const F13LD_SYNTH_VERSION = '0.3.0';
+const F13LD_SYNTH_VERSION = '0.4.0';
 
 // Model bundles. The relative path is what GitHub Pages serves; the absolute
 // one lets the single-file preview build (opened outside the site) load the
@@ -28,6 +28,14 @@ const PADS_STORAGE_KEY          = 'f13ld.synth.pads.v1';
 const CONNECTIVITY_STORAGE_KEY  = 'f13ld_synth_connectivity_v1';
 const PRESET_STORAGE_KEY        = 'f13ld.synth.preset.v1';
 
-// Search budget per click. Explore is split across the worker pool; the best
-// distinct candidates are then refined with smaller nudges.
-const SEARCH_BUDGET = { explore: 4000, refineParents: 16, refinePerParent: 150, results: 8, perSeed: 2, keepPerJob: 48 };
+// Search depth: a time budget per click. The search runs in rounds and
+// stops early once the best eight stop improving; Stop ends it any time.
+const SEARCH_DEPTHS = {
+  quick: { label: 'Quick', seconds: 1.2,  patience: 2, tip: 'Quick search: about a second' },
+  wide:  { label: 'Wide',  seconds: 5,    patience: 3, tip: 'Wide search: up to about 5 seconds, stops early when results settle' },
+  deep:  { label: 'Deep',  seconds: 15,   patience: 6, tip: 'Deep search: up to about 15 seconds, for hard targets' }
+};
+const DEFAULT_DEPTH = 'wide';
+const SEARCH_PER_WORKER = 600;       // designs per worker per round
+const SEARCH_PER_WORKER_MAIN = 300;  // main-thread fallback (keeps the page responsive)
+const DEPTH_STORAGE_KEY = 'f13ld.synth.depth.v1';

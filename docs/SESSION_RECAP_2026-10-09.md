@@ -1,3 +1,31 @@
+# Session recap — 2026-10-09 · v0.4.0 (preview, UI rebuild, wider search)
+
+## Decisions from Matt
+- Result map layout (B): map larger, thumbnails smaller
+- Push buttons in both the header and the inspector; candidate sort options
+- UI rebuild and raymarcher in one pass
+- Wider search with a loading mechanic; **Wide** is the default depth
+- Depth is a small word toggle (Quick | Wide | Deep) next to Synthesize
+- Stricter penalty on low-confidence designs
+- Pads show the target only (the map shows the candidates)
+
+## What changed
+- **3-D preview.** WebGL2 raymarcher (`25-raymarch.js`) with F13LD.tpms field math plus Mesh's per-term phase and shell normal weights; F13LD-SHADE look and F13LD-VIEW menu shared with Sweep. Orbit, zoom, 1 or 2×2×2 tiles, X/Y/Z section plane. Every card gets a thumbnail from one hidden canvas.
+- **Preview matches Mesh.** `tests/preview-parity.py` builds 12 seeds (shell, solid, PI) with the preview shader and with Mesh's own field code: 0.0 points apart in solid fraction.
+- **Search in rounds.** Each round mutates half from the current best and half from cells of a 24×24 map grid, with a mutation size that shrinks each round. Quick ≈1 s, Wide ≈5 s, Deep ≈15 s; stops early once the top results stop improving, or on Stop.
+- **The map is the loader.** Each round's designs fade in on the result map; numbered rings glide to the current top eight; dashed ellipse is the target ±1σ. Tabs switch the map between the active pads.
+- **Stricter confidence penalty.** Score × 1 up to 1.25× normal spread, falling off past that, and × 0.7 more for low. In tests the wider search no longer drifts into low-confidence designs (hard target 64% mean with no lows; easy targets ≈90%).
+- **UI rebuild** (mockup v0.5): intent column, result map, candidate strip with sort (best match / most confident / lightest), inspector with preview, fit bars and hand-off buttons; Configure drawer with Lab's 45 AM materials, model fit and search notes; status chip; phone layout in one column with no sideways scroll.
+- Drawn icons throughout (`03-icons.js`); Lab materials synced by `tools/sync-materials.js`.
+
+## Checks run
+roundtrip · forest parity · load order (22 scripts) · search smoke · Mesh parity · preview parity (0.0 points) · headless page check (Wide search, preset filter, Stop, sort, recipe re-encode, phone overflow) · single-file preview.
+
+## Open finding
+Mesh parity has one mutated solid design that builds at 4.5% solid where the model predicts 20.6%. The recipe is right (the preview agrees with Mesh); the model is wrong far from its training data. Proposal: measure the solid fraction from geometry for the final eight and lower confidence when it disagrees. Not built yet.
+
+---
+
 # Session recap — 2026-10-09 · v0.3.0 (phase 1 of the modernization)
 
 ## Plan (approved 2026-10-09)

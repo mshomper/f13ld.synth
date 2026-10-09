@@ -12,7 +12,7 @@ F13LD.synth answers a question the rest of the F13LD suite can't: *"What design 
 
 Most CAD pipelines run forward — pick parameters, simulate, see what you got. Synth runs the inverse direction. You set design intent on three X/Y pads, the predictor samples 2,000 candidate parameter sets within the trained design space, scores each against your intent, and returns the eight best with full recipes ready to open in F13LD.mesh.
 
-The predictor is a per-family Random Forest model trained offline from F13LD.vault. As the community ingests more sweep data into Vault, the model gets retrained against a richer dataset. The tool surfaces this lineage in its status bar — current Vault count, what the model was trained on, and how many designs have accumulated since.
+The predictor is a per-family Random Forest model trained offline from F13LD.vault. As the community ingests more sweep data into Vault, the model gets retrained against a richer dataset. The model chip in the header shows this lineage — what the model was trained on, its fit, and how many designs Vault has gained since.
 
 ## The three pads
 
@@ -54,18 +54,23 @@ Synth candidates can be saved back to Vault tagged as model-generated — they'r
 f13ld.synth/
 ├── index.html              ← page shell; loads the numbered scripts in order
 ├── synth.css
-├── 00-config.js            ← version, endpoints, storage keys, search budget
-├── 01-defs.js              ← materials, metric definitions, the three pads
+├── 00-config.js            ← version, endpoints, storage keys, search depths
+├── 01-defs.js              ← metric definitions, map ranges, the three pads
+├── 02-materials.js         ← F13LD.lab's AM material library (generated: tools/sync-materials.js)
+├── 03-icons.js             ← drawn icons
 ├── 10-encoding.js          ← design ⇄ feature vector ⇄ F13LD recipe (mirrors the trainer)
 ├── 11-forest.js            ← packed random-forest inference + tree spread
-├── 12-search-core.js       ← mutation, scoring, explore/refine (worker-safe)
-├── 20-predictor.js         ← bundle loading, worker pool, search orchestration
-├── 21-vault.js             ← Vault counts for the lineage status bar
-├── 30-material.js · 31-pads.js · 35-score-viz.js · 40-results.js · 50-status.js · 99-init.js
+├── 12-search-core.js       ← mutation, scoring, rounds coordinator (worker-safe)
+├── 20-predictor.js         ← bundle loading, worker pool
+├── 21-vault.js             ← Vault counts for the model chip
+├── 24-f13-shade.js         ← shared F13LD viewer shading + view menu (byte-identical across tools)
+├── 25-raymarch.js          ← 3-D preview + thumbnails
+├── 30-material.js · 31-pads.js · 35-score-viz.js · 36-state.js
+├── 40-map.js · 41-strip.js · 42-inspector.js · 43-handoff.js · 50-header.js · 51-dock.js · 99-init.js
 ├── worker/search-worker.js
 ├── train_synth.py          ← offline trainer (run locally — see docs/HOW-TO-retrain-synth.md)
 ├── vault_client.py · vault_stats.py
-├── tools/                  ← build-single.js (one-file preview), vault_diag.html
+├── tools/                  ← build-single.js (one-file preview), sync-materials.js, vault_diag.html
 ├── tests/                  ← dev checks (see tests/README.md)
 └── weights/tpms.json       ← trained model bundle
 ```
@@ -211,11 +216,15 @@ Material library presets (Ti-6Al-4V, 316L SS, 17-4PH SS, H13, Al 6061, AlSi10Mg,
 
 ## Architecture notes
 
-**Search over real designs (v0.3.0).** Every candidate is a real design: a training seed decoded into its recipe and then varied the way F13LD.sweep varies a recipe (continuous nudges inside the range the training data covers, occasional sin/cos swaps and frequency changes). That exact design is encoded and scored, and the same design is what Open in Mesh and Open in Lab send. Before v0.3.0 Synth scored a blurred feature vector and snapped it to a recipe afterwards, dropping per-term phases and normal weights on the way; the score of what it ranked and the score of what it sent differed by a median of 22 points.
+**Search over real designs.** Every candidate is a real design: a training seed decoded into its recipe and then varied the way F13LD.sweep varies a recipe (continuous nudges inside the range the training data covers, occasional sin/cos swaps and frequency changes). That exact design is encoded and scored, and the same design is what the preview shows and what Open in Mesh and Open in Lab send. (Before v0.3.0 Synth scored a blurred feature vector and snapped it to a recipe afterwards; the score of what it ranked and of what it sent differed by a median of 22 points.)
 
-**Explore, then refine.** A search grows 4,000 candidates across a pool of workers, keeps the best distinct ones, and refines the top 16 with smaller nudges. At most two of the eight results come from the same seed.
+**Rounds, by time (v0.4.0).** A search runs in rounds across a worker pool (all threads but one). Each round grows new designs from the best so far and from the best design in every filled cell of a 24 × 24 grid over the first active pad's axes, so it closes in on the target while keeping alternatives spread across the map. The mutation step starts wide and narrows each round. Depth sets the time limit — Quick (about 1 s), Wide (about 5 s, the default) and Deep (about 15 s) — and the search stops earlier once the best eight stop improving, or when you press Stop. At most two of the eight results come from the same seed.
 
-**Confidence from tree spread.** Each forest's trees vote separately; how much they disagree on a candidate, relative to how much they disagree on the training seeds, is shown on every card as high, medium or low confidence and mildly lowers the rank of designs far from the training data. This replaced the old "extrapolation" tag, which was driven by the validity classifier.
+**The map is the loader.** Every design that passes the filters lands on the result map as its round comes back; the eight best are numbered rings that glide to where the latest round put them; the dashed ring is 1σ of the model's own error around your target.
+
+**Confidence from tree spread.** Each forest's trees vote separately; how much they disagree on a candidate, relative to how much they disagree on the training seeds, is shown as high, medium or low confidence. Wider searches drift toward designs where the trees disagree (likely model error), so the rank falls off steeply past the training spread, with an extra cut for low confidence.
+
+**The preview is the build.** The 3-D preview raymarches the candidate's own field in F13LD.tpms's shader form, plus F13LD.mesh's per-term phases and anisotropic shell weights, with the suite's shared F13LD-SHADE lighting. `tests/preview-parity.py` checks its solid fraction against F13LD.mesh's field code.
 
 **Recipes say how they are normalized.** Synth writes `shell_normalize` / `pi_normalize` explicitly. F13LD.mesh and F13LD.sweep read a missing flag as on, F13LD.lab as off; the training data was characterized normalized, and without the flag Lab would build PI-TPMS pipes at several times the predicted density.
 

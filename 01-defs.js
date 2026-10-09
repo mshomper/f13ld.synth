@@ -37,6 +37,13 @@ const METRIC_DEFS = {
   gyz_norm:           { label:'Shear Gyz / Es',     labelAbs:'Shear Gyz',          unit:'GPa',   decimals:2, min:0.001,max:0.2,   norm_kind:'modulus_es' },
 };
 
+// Result-map axis ranges (normalized units). Fixed, so the map does not
+// rescale while a search fills it; points beyond the edge sit on the edge.
+const MAP_RANGES = {
+  ex_norm: [0, 0.55], pore_size_p50_norm: [0, 0.8], anisotropy: [1, 8],
+  pore_size_cv: [0.4, 1.6], volume_fraction: [0, 60], keff_avg_norm: [0, 0.42]
+};
+
 // Three pads, each defining an X/Y pair plus optional auxiliary metrics
 // computed from pad position (e.g. pad 1 sets Ex≈Ey≈Ez to its X value).
 const PAD_DEFS = [

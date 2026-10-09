@@ -4,131 +4,145 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>F13LD.Synth — Inverse Design Synthesizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="synth.css">
 </head>
 <body>
-<div id="container">
+<div class="app" id="app">
 
-  <!-- HEADER -->
-  <div class="f13ld-header">
-    <div class="fh-left">
-      <a class="fh-brand" href="https://f13ld.app" target="_blank">
-        <svg width="24" height="24" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <defs><clipPath id="f13-clip"><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z"/></clipPath></defs>
-          <path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="#111e13" stroke="#1D9E75" stroke-width="5"/>
-          <g clip-path="url(#f13-clip)" fill="none">
-            <path d="M0,50 Q25,40 50,50 Q75,60 100,50" stroke="#c8f542" stroke-width="6"/>
-            <path d="M50,0 Q40,25 50,50 Q60,75 50,100" stroke="#c8f542" stroke-width="6"/>
-            <path d="M0,31 Q25,21 50,31 Q75,41 100,31" stroke="#2c4e30" stroke-width="3"/>
-            <path d="M0,69 Q25,59 50,69 Q75,79 100,69" stroke="#2c4e30" stroke-width="3"/>
-            <path d="M31,0 Q21,25 31,50 Q41,75 31,100" stroke="#2c4e30" stroke-width="3"/>
-            <path d="M69,0 Q59,25 69,50 Q79,75 69,100" stroke="#2c4e30" stroke-width="3"/>
-            <circle cx="50" cy="50" r="7" fill="#c8f542"/>
-          </g>
-          <path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="none" stroke="#1D9E75" stroke-width="5"/>
-        </svg>
-        <div class="fh-wordmark"><span style="color:#1D9E75">F</span><span style="color:#c8f542">1</span><span style="color:#c8f542">3</span><span style="color:#1D9E75">LD</span></div>
-      </a>
-      <div class="fh-divider"></div>
-      <div class="fh-tool-name" style="color:#0A5566">SYNTH</div>
+  <header class="hdr">
+    <a class="brand" href="https://f13ld.app" target="_blank" rel="noopener">
+      <svg width="24" height="24" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="f13-clip"><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z"/></clipPath></defs><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="#111e13" stroke="#1D9E75" stroke-width="5"/><g clip-path="url(#f13-clip)" fill="none"><path d="M0,50 Q25,40 50,50 Q75,60 100,50" stroke="#c8f542" stroke-width="6"/><path d="M50,0 Q40,25 50,50 Q60,75 50,100" stroke="#c8f542" stroke-width="6"/><path d="M0,31 Q25,21 50,31 Q75,41 100,31" stroke="#2c4e30" stroke-width="3"/><path d="M0,69 Q25,59 50,69 Q75,79 100,69" stroke="#2c4e30" stroke-width="3"/><path d="M31,0 Q21,25 31,50 Q41,75 31,100" stroke="#2c4e30" stroke-width="3"/><path d="M69,0 Q59,25 69,50 Q79,75 69,100" stroke="#2c4e30" stroke-width="3"/><circle cx="50" cy="50" r="7" fill="#c8f542"/></g><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="none" stroke="#1D9E75" stroke-width="5"/></svg>
+      <div class="wm"><span style="color:#1D9E75">F</span><span style="color:#c8f542">13</span><span style="color:#1D9E75">LD</span></div>
+    </a>
+    <div class="div"></div>
+    <div class="tool">SYNTH</div>
+    <button class="model-chip" id="modelChip" type="button" title="Model details: open Configure"><span class="ico ico-sm" data-ico="model"></span><span id="modelChipTx">loading model…</span></button>
+    <div class="hdr-right" id="hdrRight">
+      <button class="pill" id="hdrMesh" type="button" title="Open the selected candidate in F13LD.mesh — build a watertight, printable 3MF" disabled><svg class="g" viewBox="0 0 16 16" data-gl="mesh"></svg>Mesh <span class="pill-sub" data-selno></span></button>
+      <button class="pill lab" id="hdrLab" type="button" title="Open the selected candidate in F13LD.lab — full solve in the validated FFT solver" disabled><svg class="g" viewBox="0 0 16 16" data-gl="lab"></svg>Lab <span class="pill-sub" data-selno></span></button>
+      <span class="ver fh-version">v0.4.0</span>
+      <div class="tile" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="#0A5566" stroke-width="1.6"/><circle cx="20" cy="20" r="7" fill="none" stroke="#0A5566" stroke-width="1.4"/><circle cx="20" cy="20" r="2" fill="#0A5566"/><path d="M20 3V9M20 31V37M3 20H9M31 20H37" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/></svg></div>
     </div>
-    <div class="fh-right">
-      <span class="fh-version">v0.3.0</span>
-      <div class="fh-icon" style="background:#E0F2F4">
-        <svg width="18" height="18" viewBox="0 0 40 40">
-          <circle cx="20" cy="20" r="13" fill="none" stroke="#0A5566" stroke-width="1.6"/>
-          <circle cx="20" cy="20" r="7" fill="none" stroke="#0A5566" stroke-width="1.4"/>
-          <circle cx="20" cy="20" r="2" fill="#0A5566"/>
-          <line x1="20" y1="3" x2="20" y2="9" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="20" y1="31" x2="20" y2="37" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="3" y1="20" x2="9" y2="20" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/>
-          <line x1="31" y1="20" x2="37" y2="20" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
+  </header>
+
+  <main class="main">
+    <section class="pnl p-intent">
+      <div class="ph"><span class="ico ico-md" data-ico="intent"></span><h2>Design intent</h2><span class="sp"></span><span class="badge" id="nActive"></span></div>
+      <div class="intent-body">
+        <div class="row"><label for="presetSel">PRESET</label><select class="sel" id="presetSel" title="Grow candidates only from training designs of this preset"><option value="">any preset</option></select></div>
+        <div class="row"><label>CONNECTED</label>
+          <div class="seg" id="connSeg">
+            <button type="button" data-v="1" title="Connected along one axis"><svg class="g" viewBox="0 0 16 16" data-gl="ax1"></svg>1</button>
+            <button type="button" data-v="2" title="Connected along two axes"><svg class="g" viewBox="0 0 16 16" data-gl="ax2"></svg>2</button>
+            <button type="button" data-v="3" title="Connected along all three axes"><svg class="g" viewBox="0 0 16 16" data-gl="ax3"></svg>3 axes</button>
+          </div>
+        </div>
+        <div class="pads" id="pads"></div>
+        <p class="hint">Drag the dot to set a target, or switch a pad to number entry. Prefer is a soft target, require counts double. Results land on the map.</p>
+      </div>
+    </section>
+
+    <section class="pnl p-map">
+      <div class="ph"><span class="ico ico-md" data-ico="map"></span><h2>Result map</h2><span class="sp"></span><div class="seg" id="mapAxSeg"></div></div>
+      <div class="map-body" id="mapBody"><canvas id="mapCv"></canvas><div class="map-legend" id="mapLegend"></div></div>
+    </section>
+
+    <section class="pnl p-strip">
+      <div class="ph"><span class="ico ico-md" data-ico="ranks"></span><h2>Candidates</h2><span class="badge" id="nScored">no search yet</span><span class="sp"></span>
+        <div class="seg" id="sortSeg"><button type="button" class="on" data-s="match">Best match</button><button type="button" data-s="conf">Most confident</button><button type="button" data-s="light">Lightest</button></div></div>
+      <div class="strip" id="strip"><div class="strip-empty">Set your intent, then Synthesize.</div></div>
+    </section>
+
+    <section class="pnl p-insp">
+      <div class="ph"><span class="ico ico-md" data-ico="inspect"></span><h2>Candidate</h2><span class="sp"></span><span class="badge" id="iSeed"></span></div>
+      <div class="insp-body" id="inspBody">
+        <div class="empty" id="inspEmpty"><span class="ico" data-ico="cell"></span>The selected candidate shows here in 3-D, with its predictions and hand-offs.</div>
+        <div id="inspMain" hidden>
+          <div class="insp-view" id="viewHost">
+            <div class="vtools">
+              <div class="seg" id="tileSeg"><button type="button" class="on" data-t="1">1 cell</button><button type="button" data-t="2">2×2×2</button></div>
+              <button class="vbtn cx" type="button" data-clip="1" title="Section along X">X</button><button class="vbtn cy" type="button" data-clip="2" title="Section along Y">Y</button><button class="vbtn cz" type="button" data-clip="3" title="Section along Z">Z</button>
+              <button class="vbtn" type="button" id="viewReset" title="Reset view"><svg class="g" viewBox="0 0 16 16" data-gl="reset"></svg></button>
+            </div>
+            <div class="vclip" id="clipRow" hidden><span>section</span><input type="range" id="clipPos" min="-1" max="1" step="0.01" value="0"></div>
+            <div class="vlabel" id="vLabel"></div>
+          </div>
+          <div class="insp-top"><div class="rank" id="iRank"></div><div class="tags" id="iTags"></div></div>
+          <div class="kv"><div><span>match</span><b id="iScore"></b></div><div><span>valid</span><b id="iValid"></b></div><div><span>confidence</span><b id="iConf"></b></div></div>
+          <div class="sec">targets</div>
+          <div class="bul" id="iBul"></div>
+          <div class="sec">other predictions</div>
+          <div class="oth" id="iOth"></div>
+          <div class="insp-act">
+            <button class="mini mesh" type="button" id="iMesh"><svg class="g" viewBox="0 0 16 16" data-gl="mesh"></svg>Open in Mesh</button>
+            <button class="mini lab" type="button" id="iLab"><svg class="g" viewBox="0 0 16 16" data-gl="lab"></svg>Open in Lab</button>
+            <button class="mini" type="button" id="iCopy"><svg class="g" viewBox="0 0 16 16" data-gl="copy"></svg><span>Copy recipe</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="drawer" id="drawer" hidden>
+    <div class="dr-grid">
+      <div class="dr-col">
+        <h3><span class="ico ico-sm" data-ico="material"></span>Material</h3>
+        <div class="fld">
+          <label class="full"><select id="matSel" aria-label="Material"></select></label>
+          <label title="Solid-phase Young's modulus"><span>Es</span><input type="number" id="ref_modulus_gpa" step="0.1"><i>GPa</i></label>
+          <label title="Solid-phase density"><span>ρ</span><input type="number" id="ref_density_gcc" step="0.01"><i>g/cc</i></label>
+          <label title="Solid-phase thermal conductivity"><span>ks</span><input type="number" id="ref_thermal_k_wmk" step="0.1"><i>W/mK</i></label>
+          <label title="Unit cell size"><span>cell</span><input type="number" id="ref_cell_size_mm" step="0.1" min="0.1"><i>mm</i></label>
+        </div>
+        <p class="dr-note">Library from F13LD.lab. Only changes how values are shown (GPa, µm, W/mK), never the search. Shared with F13LD.vault.</p>
+      </div>
+      <div class="dr-col">
+        <h3><span class="ico ico-sm" data-ico="model"></span>Model fit · held-out R²</h3>
+        <div id="r2List"></div>
+        <div class="lineage" id="lineage"></div>
+      </div>
+      <div class="dr-col">
+        <h3><span class="ico ico-sm" data-ico="sliders"></span>Search</h3>
+        <div class="fld"><label class="full"><span>family</span><select id="familySel"><option value="tpms">TPMS</option><option value="noise" disabled>Noise (soon)</option><option value="grain" disabled>Grain (soon)</option></select></label></div>
+        <p class="dr-note" id="searchNote"></p>
       </div>
     </div>
   </div>
 
-  <!-- MAIN -->
-  <div id="main">
-
-    <div id="leftCol">
-      <!-- MATERIAL CARD -->
-      <div id="refPanel" class="panel">
-        <h2 class="sec-title">Material Card<span class="sec-rule"></span><span class="sec-aux" title="Synced with F13LD.vault">synced with vault</span></h2>
-        <div class="mat-row">
-          <select class="mat-select" id="materialSel" onchange="onMaterialChange()"></select>
-          <button class="ref-clear" onclick="clearMaterialCard()">clear</button>
-        </div>
-        <div class="ref-grid">
-          <div class="ref-cell"><label title="Solid-phase Young's modulus">E_s</label><input type="number" id="ref_modulus_gpa" step="0.1" placeholder="—"><span class="ref-units">GPa</span></div>
-          <div class="ref-cell"><label title="Solid-phase density">ρ</label><input type="number" id="ref_density_gcc" step="0.01" placeholder="—"><span class="ref-units">g/cc</span></div>
-          <div class="ref-cell"><label title="Solid-phase thermal conductivity">k_s</label><input type="number" id="ref_thermal_k_wmk" step="0.1" placeholder="—"><span class="ref-units">W/mK</span></div>
-          <div class="ref-cell"><label title="Reference applied stress">σ</label><input type="number" id="ref_stress_mpa" step="0.5" placeholder="—"><span class="ref-units">MPa</span></div>
-          <div class="ref-cell full-width"><label title="Unit cell size">cell</label><input type="number" id="ref_cell_size_mm" step="0.1" placeholder="—"><span class="ref-units">mm</span></div>
-        </div>
-      </div>
-
-      <!-- PAD RACK -->
-      <div id="intentPanel" class="panel">
-        <h2 class="sec-title">Design Intent<span class="sec-rule"></span><span class="sec-aux">drag pads · click title for precision</span></h2>
-
-        <div class="preset-row">
-          <label>Family</label>
-          <select id="familySel" onchange="onFamilyChange()"><option value="tpms">TPMS</option><option value="noise" disabled>Noise (soon)</option><option value="grain" disabled>Grain (soon)</option></select>
-        </div>
-        <div class="preset-row">
-          <label>Preset</label>
-          <select id="presetSel" onchange="onPresetChange()" title="Grow candidates only from training designs of this preset"><option value="">any preset</option></select>
-        </div>
-
-        <div class="connectivity-row">
-          <span class="connectivity-label">Connectivity</span>
-          <div class="connectivity-toggle" id="connectivityToggle">
-            <button data-axes="1" onclick="toggleConnectivity(1)">1 axis</button>
-            <button data-axes="2" onclick="toggleConnectivity(2)">2 axes</button>
-            <button data-axes="3" class="active" onclick="toggleConnectivity(3)">3 axes</button>
-          </div>
-        </div>
-
-        <div class="pad-rack" id="padRack"></div>
-
-        <button id="searchBtn" onclick="runSearch()">
-          Synthesize Designs
-        </button>
-      </div>
-    </div>
-
-    <div id="rightCol">
-      <div id="modelStatus"></div>
-      <div id="resultsPanel">
-        <div class="results-header">
-          <div class="results-title"><span class="title-dot"></span>Synthesized Candidates</div>
-          <div class="results-meta" id="resultsMeta">No search yet</div>
-        </div>
-        <div id="resultsBody">
-          <div class="engine-empty">
-                        Set design intent on the pads, then click Synthesize Designs.<br>
-            <span class="empty-detail">Each candidate is a parameter set the predictor generated and scored.</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <footer class="dock">
+    <button class="cfg" id="cfgBtn" type="button" aria-expanded="false" aria-controls="drawer" title="Material, model fit and search details"><span class="ico ico-md" data-ico="sliders"></span><span class="cfg-l">Configure</span><svg class="g" viewBox="0 0 16 16" data-gl="chev"></svg></button>
+    <div class="dtags" id="dockTags"></div>
+    <span class="sp"></span>
+    <div class="st" id="st"><span class="stm" id="stMark"></span><span class="stx" id="stTx">loading model…</span><span class="sbar2"><i id="stBar"></i></span></div>
+    <div class="seg depth" id="depthSeg" role="group" aria-label="Search depth"></div>
+    <button class="run" id="runBtn" type="button" disabled><svg class="g" viewBox="0 0 16 16" data-gl="play"></svg><span>Synthesize</span></button>
+  </footer>
 </div>
 
 <!-- Numbered classic scripts share one global scope and load in order. -->
 <script defer src="00-config.js"></script>
 <script defer src="01-defs.js"></script>
+<script defer src="02-materials.js"></script>
+<script defer src="03-icons.js"></script>
 <script defer src="10-encoding.js"></script>
 <script defer src="11-forest.js"></script>
 <script defer src="12-search-core.js"></script>
 <script defer src="20-predictor.js"></script>
 <script defer src="21-vault.js"></script>
+<script defer src="24-f13-shade.js"></script>
+<script defer src="25-raymarch.js"></script>
 <script defer src="30-material.js"></script>
 <script defer src="31-pads.js"></script>
 <script defer src="35-score-viz.js"></script>
-<script defer src="40-results.js"></script>
-<script defer src="50-status.js"></script>
+<script defer src="36-state.js"></script>
+<script defer src="40-map.js"></script>
+<script defer src="41-strip.js"></script>
+<script defer src="42-inspector.js"></script>
+<script defer src="43-handoff.js"></script>
+<script defer src="50-header.js"></script>
+<script defer src="51-dock.js"></script>
 <script defer src="99-init.js"></script>
 </body>
 </html>

@@ -1,34 +1,49 @@
 /* ============================================================
    F13LD.synth · 99-init.js
-   Boot.
+   Boot: restore state, build the UI, load the model and Vault counts.
    ============================================================ */
 'use strict';
 
-// ============================================================
-// BOOT
-// ============================================================
 async function boot() {
+  paintIcons(document);
   loadGlobalInputs();
-  // Fresh browser: the default material is selected but its values were never
-  // filled in, so nothing resolved to physical units. Fill them once.
-  if (MATERIAL_PRESETS[globalInputs.material_id] && globalInputs.modulus_gpa == null) applyMaterialPreset(globalInputs.material_id);
   loadPadState();
   loadConnectivityState();
-  buildMaterialDropdown();
-  syncMaterialCardToInputs();
-  wireMaterialInputs();
-  buildPadRack();
-  syncConnectivityToggleUI();
-
   loadPresetState();
-  refreshModelStatus();
+  buildMaterialSelect();
+  wireConnectivity();
+  renderPads();
+  wireMap();
+  wireSort();
+  wireInspector();
+  wireHandoff();
+  wireHeader();
+  wireDrawer();
+  buildDepthSeg();
+  statusInit();
+  wireRun();
+  renderDockTags();
+  renderStrip();
+  renderInspector();
+  renderModelChip();
+  const first = firstActivePad();
+  if (first) mapSetTab(PAD_DEFS.indexOf(first)); else mapRender();
 
-  // Load Vault and Predictor in parallel — both are needed for full status display.
   await Promise.allSettled([
-    Vault.loadCounts().catch(e => { console.warn('[F13LD.synth] Vault unreachable:', e.message); }),
-    Predictor.loadFamily('tpms').then(() => { if (Predictor.loaded) buildPresetDropdown(); refreshModelStatus(); })
+    Vault.loadCounts().catch(e => { console.warn('[F13LD.synth] Vault unreachable:', e.message); }).then(renderModelChip),
+    Predictor.loadFamily('tpms').then(() => {
+      renderModelChip();
+      if (Predictor.loaded) {
+        buildPresetDropdown();
+        document.getElementById('runBtn').disabled = false;
+        const W = Predictor.pool ? Predictor.pool.size : 0;
+        statusSet('', `ready · ${Predictor.seedTable.seeds.length} training designs · ${W ? W + ' workers' : 'page thread'}`);
+      } else {
+        statusSet('warn', 'model unavailable');
+      }
+      mapRender();
+    })
   ]);
-
-  refreshModelStatus();
+  renderModelChip();
 }
 boot();
