@@ -24,7 +24,7 @@ Synth deliberately doesn't expose nine independent metric sliders. Instead, thre
 
 **Mass × Thermal** — the optional second-tier tradeoff. X-axis is volume fraction, Y-axis is thermal conductivity. Off by default; toggle on when heat handling matters (thermal exchangers, bone cement curing, etc.).
 
-Each pad has an `off / prefer / require` toggle. Off contributes nothing to the search. Prefer is a soft target. Require carries 2× the weight. Click any pad title to flip into precision mode — the SVG swaps for two number inputs with proper units, and any pinned values feed back into the search at high weight.
+Each pad has an `off / prefer / require` toggle. Off contributes nothing to the search. Prefer is a soft target. Require carries 2× the weight. Click any pad title to flip into precision mode. The **Preset** menu grows candidates only from training designs of one preset (listed from the loaded model with seed counts) — the SVG swaps for two number inputs with proper units, and any pinned values feed back into the search at high weight.
 
 The 9th metric (`surface_complexity`) is dropped from controls — it's still predicted and shown on result cards, but it's a model-quality signal more than a design intent and isn't worth a knob.
 
@@ -52,17 +52,25 @@ Synth candidates can be saved back to Vault tagged as model-generated — they'r
 
 ```
 f13ld.synth/
-├── index.html              ← The tool. Single-file, no build step.
-├── train_synth.py          ← Offline trainer (Pattern A — manual local script)
-├── weights/
-│   └── tpms.json           ← Trained model bundle, GitHub Pages serves gzipped (~4 MB)
-├── README.md
-└── .gitignore
+├── index.html              ← page shell; loads the numbered scripts in order
+├── synth.css
+├── 00-config.js            ← version, endpoints, storage keys, search budget
+├── 01-defs.js              ← materials, metric definitions, the three pads
+├── 10-encoding.js          ← design ⇄ feature vector ⇄ F13LD recipe (mirrors the trainer)
+├── 11-forest.js            ← packed random-forest inference + tree spread
+├── 12-search-core.js       ← mutation, scoring, explore/refine (worker-safe)
+├── 20-predictor.js         ← bundle loading, worker pool, search orchestration
+├── 21-vault.js             ← Vault counts for the lineage status bar
+├── 30-material.js · 31-pads.js · 35-score-viz.js · 40-results.js · 50-status.js · 99-init.js
+├── worker/search-worker.js
+├── train_synth.py          ← offline trainer (run locally — see docs/HOW-TO-retrain-synth.md)
+├── vault_client.py · vault_stats.py
+├── tools/                  ← build-single.js (one-file preview), vault_diag.html
+├── tests/                  ← dev checks (see tests/README.md)
+└── weights/tpms.json       ← trained model bundle
 ```
 
-`index.html` is a pure single-file SPA — no build, no bundler, no npm. It loads the trained model JSON at boot via `fetch()`, walks the trees in JavaScript (typed-array implementation, ~50 ms per inverse search), and connects to F13LD.vault via the same Supabase REST API that Vault explorer uses.
-
-`train_synth.py` is the offline trainer. Runs on a normal Python install with `numpy`, `scikit-learn`, and `tensorflow` (the last only because the import is shared with other F13LD scripts; the trainer itself uses scikit-learn's RandomForest). Outputs a self-contained JSON model bundle.
+No build step. The numbered scripts are plain classic scripts sharing one global scope, the same layout as F13LD.mesh, F13LD.lab and F13LD.sweep. Serve over http(s); for a single file you can open directly, run `node tools/build-single.js`.
 
 ---
 
@@ -131,7 +139,7 @@ Reduce `--n-estimators` for smaller model files at modest R² cost. Reduce `--de
 ### What the trainer does
 
 1. **Loads designs** from the chosen source, filtering to the requested family (e.g., gyroid + schwarzD + schwarzP + lidinoid + frd + iwp + Fischer-Koch S all roll up to family `tpms`)
-2. **Encodes** each design via the unified 233-D feature vector — works across all modes, term counts, and factor frequency configurations within a family
+2. **Encodes** each design via the unified feature vector (384 slots with the default 10-term cap) — works across all modes, term counts, and factor frequency configurations within a family
 3. **Trains a validity classifier** on every loaded design (predicts whether a parameter set produces solver-valid geometry)
 4. **Trains a metrics regressor** with 9 output heads on valid designs only (predicts each normalized output metric independently)
 5. **Picks 200 seed samples** from the training set — the browser uses these as Gaussian-perturbation seeds during inverse search to keep candidates near the training distribution
@@ -203,15 +211,19 @@ Material library presets (Ti-6Al-4V, 316L SS, 17-4PH SS, H13, Al 6061, AlSi10Mg,
 
 ## Architecture notes
 
-**Single-file SPA.** No build, no bundler. The only external dependencies are the Google Fonts CSS for Exo 2 / IBM Plex Mono and the trained model JSON in `weights/`. Everything else (Random Forest inference, SVG rendering, Vault REST client, material card persistence) is self-contained.
+**Search over real designs (v0.3.0).** Every candidate is a real design: a training seed decoded into its recipe and then varied the way F13LD.sweep varies a recipe (continuous nudges inside the range the training data covers, occasional sin/cos swaps and frequency changes). That exact design is encoded and scored, and the same design is what Open in Mesh and Open in Lab send. Before v0.3.0 Synth scored a blurred feature vector and snapped it to a recipe afterwards, dropping per-term phases and normal weights on the way; the score of what it ranked and the score of what it sent differed by a median of 22 points.
+
+**Explore, then refine.** A search grows 4,000 candidates across a pool of workers, keeps the best distinct ones, and refines the top 16 with smaller nudges. At most two of the eight results come from the same seed.
+
+**Confidence from tree spread.** Each forest's trees vote separately; how much they disagree on a candidate, relative to how much they disagree on the training seeds, is shown on every card as high, medium or low confidence and mildly lowers the rank of designs far from the training data. This replaced the old "extrapolation" tag, which was driven by the validity classifier.
+
+**Recipes say how they are normalized.** Synth writes `shell_normalize` / `pi_normalize` explicitly. F13LD.mesh and F13LD.sweep read a missing flag as on, F13LD.lab as off; the training data was characterized normalized, and without the flag Lab would build PI-TPMS pipes at several times the predicted density.
 
 **Random Forest, not MLP.** Original v0.1 scoping called for a small MLP. Empirical diagnostic at 257 samples showed RF outperforming MLP by 0.5+ in mean R² — small-data regime favors trees. The unified-feature trainer reaches mean R² 0.71 on 933 samples, with stiffness/volume_fraction predictions at R² > 0.85.
 
-**Unified feature vector.** One model per family, not per (mode, term-count) configuration. The 233-D vector encodes mode as one-hot, term/factor slots as zero-padded fixed-length arrays. This was the key insight that turned the predictor from non-functional (R² 0.25 per-config) into useful (R² 0.71 unified). Trade-off: the model can't extrapolate to entirely new modes — every mode the user might query has to appear in the training data. Adding a new mode means retraining.
+**Unified feature vector.** One model per family, not per (mode, term-count) configuration. The vector encodes mode as one-hot, term/factor slots as zero-padded fixed-length arrays. This was the key insight that turned the predictor from non-functional (R² 0.25 per-config) into useful (R² 0.71 unified). Trade-off: the model can't extrapolate to entirely new modes — every mode the user might query has to appear in the training data. Adding a new mode means retraining.
 
-**Tree walker uses typed arrays.** TreeWalker stores `feature` as Int32Array, `threshold` and `value` as Float32Array. V8 JITs the tight loop down to near-native; a 2,000-candidate inverse search through 1,351 trees (150 validity + 9 × 150 metrics) finishes in ~50 ms on a modern desktop, ~200 ms on a phone.
-
-**Browser-side candidate sampling.** The inverse search samples 2,000 candidates by perturbing one of 200 stored training-set seeds with 5% Gaussian noise per feature. Uniform random sampling in the 233-D hypercube would be 99% out-of-distribution; perturbing real training samples keeps candidates near the manifold the predictor was trained on, so predictions stay calibrated.
+**Packed forests.** Each forest is one buffer of 12-byte node records (split feature, threshold or leaf value, right child; the left child is always the next node). Scoring one candidate walks 1,650 trees; on a single core that is roughly 0.3–0.6 ms, so a full search takes well under a second on a multi-core desktop.
 
 **Validity early-rejection.** During inverse search, candidates are first scored by the validity classifier. Anything below 30% confidence is rejected before the more expensive 9-forest metric prediction runs. Saves about 30% of total compute on a typical search.
 

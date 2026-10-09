@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F13LD.Vault — Diagnostic</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#06080f;color:#e0e0ff;font-family:'Exo 2',system-ui,sans-serif}
+#container{display:flex;flex-direction:column;min-height:100vh;max-width:1200px;margin:0 auto;width:100%}
+
+.f13ld-header{display:flex;align-items:center;justify-content:space-between;background:#06080f;border-bottom:0.5px solid #1a2a1a;padding:0 14px;height:48px;flex-shrink:0}
+.fh-left{display:flex;align-items:center;gap:10px}
+.fh-wordmark{font-size:17px;font-weight:700;letter-spacing:0.1em;line-height:1}
+.fh-divider{width:0.5px;height:24px;background:#1a2a1a}
+.fh-tool-name{font-size:15px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;line-height:1;color:#0A5566}
+.fh-version{font-size:10px;color:#2a3a2a;letter-spacing:0.1em}
+
+#main{flex:1;padding:14px;display:flex;flex-direction:column;gap:14px}
+
+.panel{background:#0a0d18;border:0.5px solid #2a2a3a;border-radius:12px;padding:14px 16px}
+
+h2.sec-title{font-size:11px;font-weight:600;color:#7c8aaa;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+h2.sec-title .sec-rule{flex:1;height:0.5px;background:#1a2a3a}
+h2.sec-title .sec-aux{font-size:11px;color:#a0aac0;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;text-transform:none;font-weight:400}
+
+/* CONFIG */
+.cfg-grid{display:grid;grid-template-columns:auto 1fr auto;gap:8px 12px;align-items:center}
+.cfg-grid label{font-size:10px;color:#7c8aaa;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;text-align:right}
+.cfg-grid input{font-size:12px;padding:6px 10px;background:#13182a;border:0.5px solid #2a3a5a;border-radius:6px;color:#e0e0ff;font-family:'IBM Plex Mono',monospace;outline:none;width:100%}
+.cfg-grid input:focus{border-color:#4FB8C9}
+.cfg-grid .cfg-status{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;padding:3px 8px;border-radius:3px;text-transform:uppercase}
+.cfg-status.idle{color:#5a6680;background:rgba(127,140,170,0.08);border:0.5px solid rgba(127,140,170,0.3)}
+.cfg-status.ok{color:#5BB892;background:rgba(91,184,146,0.08);border:0.5px solid rgba(91,184,146,0.4)}
+.cfg-status.err{color:#ff7050;background:rgba(255,80,80,0.08);border:0.5px solid rgba(255,80,80,0.4)}
+.cfg-status.busy{color:#4FB8C9;background:rgba(79,184,201,0.08);border:0.5px solid rgba(79,184,201,0.4)}
+
+/* QUERY CONTROLS */
+.q-grid{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:10px 14px;align-items:center;margin-bottom:12px}
+.q-grid label{font-size:10px;color:#7c8aaa;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:0.06em;text-align:right}
+.q-grid select,.q-grid input[type=text],.q-grid input[type=number],.q-grid input[type=date]{font-size:12px;padding:6px 10px;background:#13182a;border:0.5px solid #2a3a5a;border-radius:6px;color:#e0e0ff;font-family:'IBM Plex Mono',monospace;outline:none;width:100%}
+.q-grid select:focus,.q-grid input:focus{border-color:#4FB8C9}
+.q-checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:4px;padding-top:8px;border-top:0.5px dashed #1a2a3a}
+.q-checks label{display:flex;align-items:center;gap:6px;font-size:11px;color:#a0aac0;cursor:pointer;font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em}
+.q-checks input[type=checkbox]{accent-color:#c8f542;width:14px;height:14px;cursor:pointer}
+
+/* ACTION BUTTONS */
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.action-btn{font-size:12px;padding:10px 16px;border:0.5px solid #4FB8C9;border-radius:7px;background:rgba(79,184,201,0.12);color:#7BD3E3;cursor:pointer;font-family:'Exo 2',sans-serif;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;transition:background 0.15s,box-shadow 0.15s}
+.action-btn:hover:not(:disabled){background:rgba(79,184,201,0.22);box-shadow:0 0 12px rgba(79,184,201,0.25)}
+.action-btn:disabled{opacity:0.4;cursor:not-allowed}
+.action-btn.primary{background:rgba(200,245,66,0.1);border-color:#c8f542;color:#c8f542}
+.action-btn.primary:hover:not(:disabled){background:rgba(200,245,66,0.18);box-shadow:0 0 12px rgba(200,245,66,0.25)}
+
+/* OUTPUT */
+#output{min-height:200px;font-family:'IBM Plex Mono',monospace}
+.out-empty{padding:50px 20px;text-align:center;color:#445270;font-size:12px;line-height:1.7}
+.out-empty .glyph{font-size:32px;margin-bottom:14px;opacity:0.3}
+.out-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:0.5px solid #1f2840}
+.out-title{font-size:13px;color:#7BD3E3;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+.out-meta{font-size:10px;color:#5a6680;letter-spacing:0.04em}
+.out-actions{display:flex;gap:6px}
+.out-mini-btn{font-size:9px;padding:4px 9px;border:0.5px solid #2a3a5a;border-radius:4px;background:transparent;color:#7c8aaa;cursor:pointer;font-family:'IBM Plex Mono',monospace;letter-spacing:0.06em;text-transform:uppercase;transition:color 0.15s,border-color 0.15s}
+.out-mini-btn:hover{color:#7BD3E3;border-color:#4FB8C9}
+
+/* COUNT result */
+.count-big{font-size:48px;font-weight:600;color:#c8f542;font-family:'IBM Plex Mono',monospace;letter-spacing:0.04em;text-align:center;padding:30px 0 8px}
+.count-cap{font-size:11px;color:#7c8aaa;text-align:center;letter-spacing:0.08em;text-transform:uppercase;padding-bottom:30px}
+
+/* SCHEMA result */
+.schema-list{display:grid;grid-template-columns:auto 1fr auto;gap:4px 16px;align-items:baseline;font-size:12px}
+.schema-list .col-name{color:#c8f542;font-weight:500}
+.schema-list .col-type{color:#7c8aaa;font-size:10px;text-transform:uppercase;letter-spacing:0.04em}
+.schema-list .col-sample{color:#a0aac0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:600px}
+.schema-list .col-sample.null{color:#5a6680;font-style:italic}
+
+/* SAMPLE result */
+.sample-rows{display:flex;flex-direction:column;gap:14px}
+.sample-row{background:#0d1424;border:0.5px solid #1f2840;border-radius:8px;padding:12px 14px}
+.sample-row-header{font-size:10px;color:#5a6680;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:0.5px solid #1a2030}
+.sample-fields{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;font-size:11px}
+.sample-fields .sf-key{color:#7c8aaa;letter-spacing:0.02em}
+.sample-fields .sf-val{color:#c0c8e0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sample-fields .sf-val.null{color:#5a6680;font-style:italic;font-weight:400}
+.sample-fields .sf-val.json{color:#7BD3E3}
+
+/* DUMP result */
+.dump-progress-bar{height:4px;background:#1a2030;border-radius:2px;overflow:hidden;margin:12px 0}
+.dump-progress-fill{height:100%;background:#4FB8C9;transition:width 0.2s}
+.dump-progress-fill.done{background:#c8f542}
+.dump-summary{font-size:12px;color:#a0aac0;line-height:1.7;font-family:'IBM Plex Mono',monospace}
+.dump-summary b{color:#c8f542;font-weight:500}
+
+/* ERROR */
+.out-error{background:rgba(255,80,80,0.06);border:0.5px solid rgba(255,80,80,0.3);border-radius:8px;padding:14px 16px;color:#ff9070;font-size:12px;line-height:1.7}
+.out-error b{color:#ff7050}
+
+@media (max-width:780px){
+  .q-grid{grid-template-columns:auto 1fr}
+  .cfg-grid{grid-template-columns:auto 1fr}
+  .cfg-grid .cfg-status{grid-column:1/-1;justify-self:start}
+}
+</style>
+</head>
+<body>
+
+<div id="container">
+
+  <div class="f13ld-header">
+    <div class="fh-left">
+      <div class="fh-wordmark">
+        <span style="color:#1D9E75">F</span><span style="color:#c8f542">1</span><span style="color:#c8f542">3</span><span style="color:#1D9E75">LD</span>
+      </div>
+      <div class="fh-divider"></div>
+      <div class="fh-tool-name">VAULT · DIAG</div>
+    </div>
+    <span class="fh-version">v0.1</span>
+  </div>
+
+  <div id="main">
+
+    <!-- CONFIG -->
+    <div class="panel">
+      <h2 class="sec-title">Connection<span class="sec-rule"></span><span class="sec-aux">edit if pointing at a different Supabase project</span></h2>
+      <div class="cfg-grid">
+        <label>URL</label>
+        <input type="text" id="cfgUrl" value="https://axinljpecycnvfncyhfs.supabase.co">
+        <span class="cfg-status idle" id="cfgStatus">idle</span>
+        <label>Key</label>
+        <input type="text" id="cfgKey" value="sb_publishable_DAlrNLqbUZiwkaA6wPSMIw_YUNY85LX">
+        <span></span>
+        <label>Table</label>
+        <input type="text" id="cfgTable" value="f13ld_designs">
+        <span></span>
+      </div>
+    </div>
+
+    <!-- QUERY -->
+    <div class="panel">
+      <h2 class="sec-title">Query<span class="sec-rule"></span><span class="sec-aux">filters apply to count, schema, sample, and full dump</span></h2>
+
+      <div class="q-grid">
+        <label>Family</label>
+        <select id="qFamily">
+          <option value="">all families</option>
+          <option value="tpms" selected>tpms</option>
+          <option value="spinodoid">spinodoid</option>
+          <option value="grf">grf</option>
+          <option value="hyperuniform">hyperuniform</option>
+          <option value="noise">noise</option>
+        </select>
+        <label>Since</label>
+        <input type="date" id="qSince">
+        <label>Limit</label>
+        <input type="number" id="qLimit" placeholder="(default per action)" min="1" step="1">
+        <label>Order</label>
+        <select id="qOrder">
+          <option value="created_at.desc" selected>newest first</option>
+          <option value="created_at.asc">oldest first</option>
+        </select>
+        <label>solver_validity</label>
+        <input type="text" id="qValidity" placeholder="(any value — leave blank for default)">
+        <span></span>
+        <span></span>
+      </div>
+
+      <div class="q-checks">
+        <label><input type="checkbox" id="qValidOnly" checked> exclude solver_validity=invalid (the default v0.1 used)</label>
+        <label><input type="checkbox" id="qExcludeDegen" checked> exclude_degenerate</label>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="panel">
+      <h2 class="sec-title">Actions<span class="sec-rule"></span></h2>
+      <div class="actions">
+        <button class="action-btn" onclick="runCount()">Count</button>
+        <button class="action-btn" onclick="runSchema()">Schema</button>
+        <button class="action-btn" onclick="runSample()">Sample (5 rows)</button>
+        <button class="action-btn primary" onclick="runDump()">Full Dump</button>
+      </div>
+    </div>
+
+    <!-- OUTPUT -->
+    <div class="panel">
+      <h2 class="sec-title">Output<span class="sec-rule"></span><span class="sec-aux" id="outAux"></span></h2>
+      <div id="output">
+        <div class="out-empty">
+          <div class="glyph">▢</div>
+          <div>Pick a query above and hit an action.</div>
+          <div style="margin-top:6px;color:#5a6680">Count and Schema are the cheapest places to start.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// F13LD.vault diagnostic — browser-side equivalent of vault_client.py.
+// All requests go directly to Supabase REST. anon key, public-safe.
+// =========================================================================
+
+function getCfg() {
+  return {
+    url: document.getElementById('cfgUrl').value.trim().replace(/\/+$/, ''),
+    key: document.getElementById('cfgKey').value.trim(),
+    table: document.getElementById('cfgTable').value.trim()
+  };
+}
+
+function getQuery() {
+  const family = document.getElementById('qFamily').value;
+  const since = document.getElementById('qSince').value;
+  const limit = parseInt(document.getElementById('qLimit').value, 10);
+  const order = document.getElementById('qOrder').value;
+  const validity = document.getElementById('qValidity').value.trim();
+  return {
+    family: family || null,
+    validOnly: document.getElementById('qValidOnly').checked,
+    excludeDegenerate: document.getElementById('qExcludeDegen').checked,
+    since: since || null,
+    limit: isNaN(limit) ? null : limit,
+    order,
+    validity: validity || null
+  };
+}
+
+function buildFilterParams(q) {
+  const params = [];
+  if (q.family) params.push(['family', `eq.${q.family}`]);
+  // Explicit solver_validity value overrides the checkbox default.
+  if (q.validity) {
+    params.push(['solver_validity', `eq.${q.validity}`]);
+  } else if (q.validOnly) {
+    params.push(['solver_validity', 'neq.invalid']);
+  }
+  if (q.excludeDegenerate) params.push(['degenerate', 'not.is.true']);
+  if (q.since) params.push(['created_at', `gte.${q.since}`]);
+  return params;
+}
+
+function buildUrl(cfg, params) {
+  const base = `${cfg.url}/rest/v1/${cfg.table}`;
+  if (!params || params.length === 0) return base;
+  const qs = params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');
+  return `${base}?${qs}`;
+}
+
+async function vaultFetch(cfg, params, extraHeaders) {
+  const headers = {
+    apikey: cfg.key,
+    Authorization: `Bearer ${cfg.key}`,
+    Accept: 'application/json',
+    ...(extraHeaders || {})
+  };
+  const url = buildUrl(cfg, params);
+  const res = await fetch(url, { headers, mode: 'cors', cache: 'no-store', credentials: 'omit' });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status} ${res.statusText}`;
+    try { const body = await res.text(); if (body) msg += ` — ${body.slice(0, 200)}`; } catch(e){}
+    throw new Error(msg);
+  }
+  return res;
+}
+
+function parseTotalFromContentRange(header) {
+  if (!header || !header.includes('/')) return null;
+  const tail = header.split('/', 2)[1];
+  if (!tail || tail === '*') return null;
+  const n = parseInt(tail, 10);
+  return isNaN(n) ? null : n;
+}
+
+function setStatus(state, msg) {
+  const el = document.getElementById('cfgStatus');
+  el.className = `cfg-status ${state}`;
+  el.textContent = msg;
+}
+
+function setOutAux(text) { document.getElementById('outAux').textContent = text; }
+
+function setOutput(html) { document.getElementById('output').innerHTML = html; }
+
+function showError(action, err) {
+  setStatus('err', 'error');
+  setOutAux('');
+  setOutput(`<div class="out-error"><b>${action} failed</b><br>${escapeHtml(err.message || String(err))}</div>`);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function inferType(v) {
+  if (v === null || v === undefined) return 'null';
+  if (Array.isArray(v)) return 'array';
+  if (typeof v === 'object') return 'object';
+  if (typeof v === 'number') return Number.isInteger(v) ? 'int' : 'float';
+  if (typeof v === 'boolean') return 'bool';
+  if (typeof v === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return 'datetime';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return 'date';
+    return 'string';
+  }
+  return typeof v;
+}
+
+function summarizeValue(v) {
+  if (v === null || v === undefined) return ['null', 'null'];
+  if (typeof v === 'string' && v.length > 80) return ['', `"${v.slice(0, 77)}..."`];
+  if (typeof v === 'string') return ['', `"${v}"`];
+  if (Array.isArray(v) || typeof v === 'object') {
+    const json = JSON.stringify(v);
+    return ['json', json.length > 80 ? json.slice(0, 77) + '...' : json];
+  }
+  return ['', String(v)];
+}
+
+// ---------- COUNT ----------
+async function runCount() {
+  const cfg = getCfg();
+  const q = getQuery();
+  const params = [['select', 'created_at'], ['limit', '1'], ...buildFilterParams(q)];
+  setStatus('busy', 'fetching');
+  setOutAux('count');
+  setOutput(`<div class="out-empty"><div class="glyph">⌛</div>Counting…</div>`);
+  try {
+    const res = await vaultFetch(cfg, params, { Prefer: 'count=exact' });
+    const total = parseTotalFromContentRange(res.headers.get('Content-Range')) ?? 0;
+    setStatus('ok', 'ok');
+    const ts = new Date().toLocaleTimeString();
+    setOutAux(`count · ${ts}`);
+    const filterDesc = describeFilters(q);
+    setOutput(`
+      <div class="out-header">
+        <div class="out-title">Count</div>
+        <div class="out-meta">${escapeHtml(filterDesc)}</div>
+      </div>
+      <div class="count-big">${total.toLocaleString()}</div>
+      <div class="count-cap">matching rows</div>
+    `);
+  } catch (e) { showError('Count', e); }
+}
+
+function describeFilters(q) {
+  const parts = [];
+  parts.push(`family=${q.family || 'any'}`);
+  if (q.validity) parts.push(`solver_validity=${q.validity}`);
+  else if (q.validOnly) parts.push('exclude invalid');
+  if (q.excludeDegenerate) parts.push('exclude_degenerate');
+  if (q.since) parts.push(`since=${q.since}`);
+  return parts.join(' · ');
+}
+
+// ---------- SCHEMA ----------
+async function runSchema() {
+  const cfg = getCfg();
+  const q = getQuery();
+  const params = [['select', '*'], ['limit', '1'], ['order', q.order], ...buildFilterParams(q)];
+  setStatus('busy', 'fetching');
+  setOutAux('schema');
+  setOutput(`<div class="out-empty"><div class="glyph">⌛</div>Fetching one row to inspect schema…</div>`);
+  try {
+    const res = await vaultFetch(cfg, params);
+    const rows = await res.json();
+    setStatus('ok', 'ok');
+    const ts = new Date().toLocaleTimeString();
+    if (rows.length === 0) {
+      setOutAux(`schema · ${ts}`);
+      setOutput(`
+        <div class="out-header"><div class="out-title">Schema</div></div>
+        <div class="out-empty"><div class="glyph">·</div>No rows match the current filters — can't infer schema. Try widening filters.</div>
+      `);
+      return;
+    }
+    const sample = rows[0];
+    const cols = Object.keys(sample).sort();
+    const colNamesText = cols.join('\n');
+    setOutAux(`schema · ${ts}`);
+    let html = `
+      <div class="out-header">
+        <div class="out-title">Schema · ${cols.length} columns</div>
+        <div class="out-actions">
+          <button class="out-mini-btn" id="copyCols">Copy column names</button>
+          <button class="out-mini-btn" id="copyJson">Copy sample JSON</button>
+        </div>
+      </div>
+      <div class="schema-list">
+    `;
+    for (const k of cols) {
+      const v = sample[k];
+      const t = inferType(v);
+      const [cls, disp] = summarizeValue(v);
+      html += `<span class="col-name">${escapeHtml(k)}</span><span class="col-type">${t}</span><span class="col-sample ${cls}">${escapeHtml(disp)}</span>`;
+    }
+    html += `</div>`;
+    setOutput(html);
+    document.getElementById('copyCols').onclick = () => copyToClipboard(colNamesText, 'Copy column names');
+    document.getElementById('copyJson').onclick = () => copyToClipboard(JSON.stringify(sample, null, 2), 'Copy sample JSON');
+  } catch (e) { showError('Schema', e); }
+}
+
+function copyToClipboard(text, label) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btns = document.querySelectorAll('.out-mini-btn');
+    btns.forEach(b => { if (b.textContent.startsWith(label.split(' ')[0])) { const orig = b.textContent; b.textContent = '✓ copied'; setTimeout(() => b.textContent = orig, 1400); } });
+  }).catch(() => alert('Clipboard write failed — select the text and copy manually.'));
+}
+
+// ---------- SAMPLE ----------
+async function runSample() {
+  const cfg = getCfg();
+  const q = getQuery();
+  const limit = q.limit || 5;
+  const params = [['select', '*'], ['limit', String(limit)], ['order', q.order], ...buildFilterParams(q)];
+  setStatus('busy', 'fetching');
+  setOutAux('sample');
+  setOutput(`<div class="out-empty"><div class="glyph">⌛</div>Fetching ${limit} rows…</div>`);
+  try {
+    const res = await vaultFetch(cfg, params);
+    const rows = await res.json();
+    setStatus('ok', 'ok');
+    const ts = new Date().toLocaleTimeString();
+    setOutAux(`sample · ${ts}`);
+    if (rows.length === 0) {
+      setOutput(`<div class="out-header"><div class="out-title">Sample</div></div><div class="out-empty"><div class="glyph">·</div>No rows match.</div>`);
+      return;
+    }
+    let html = `
+      <div class="out-header">
+        <div class="out-title">Sample · ${rows.length} rows</div>
+        <div class="out-meta">${escapeHtml(describeFilters(q))}</div>
+      </div>
+      <div class="sample-rows">
+    `;
+    rows.forEach((row, i) => {
+      const ts = row.created_at ? `${row.created_at}` : `row ${i+1}`;
+      const v = row.solver_validity != null ? row.solver_validity : '(no solver_validity)';
+      const idLabel = `${ts}  ·  solver_validity = ${v}`;
+      html += `<div class="sample-row"><div class="sample-row-header">${escapeHtml(idLabel)}</div><div class="sample-fields">`;
+      const keys = Object.keys(row).sort();
+      for (const k of keys) {
+        const [cls, disp] = summarizeValue(row[k]);
+        html += `<span class="sf-key">${escapeHtml(k)}</span><span class="sf-val ${cls}">${escapeHtml(disp)}</span>`;
+      }
+      html += `</div></div>`;
+    });
+    html += `</div>`;
+    setOutput(html);
+  } catch (e) { showError('Sample', e); }
+}
+
+// ---------- FULL DUMP ----------
+async function runDump() {
+  const cfg = getCfg();
+  const q = getQuery();
+  const filters = buildFilterParams(q);
+  setStatus('busy', 'fetching');
+  setOutAux('dump');
+  const t0 = performance.now();
+  let total = null;
+  let rows = [];
+  let pageSize = 1000;
+  let offset = 0;
+  setOutput(`
+    <div class="out-header">
+      <div class="out-title">Full Dump</div>
+      <div class="out-meta" id="dumpMeta">starting…</div>
+    </div>
+    <div class="dump-progress-bar"><div class="dump-progress-fill" id="dumpFill" style="width:0%"></div></div>
+    <div class="dump-summary" id="dumpSummary">Initializing query…</div>
+  `);
+  try {
+    while (true) {
+      const cap = q.limit != null ? Math.min(pageSize, q.limit - rows.length) : pageSize;
+      if (cap <= 0) break;
+      const params = [['select', '*'], ['order', q.order], ...filters, ['offset', String(offset)], ['limit', String(cap)]];
+      const headers = offset === 0 ? { Prefer: 'count=exact' } : {};
+      const res = await vaultFetch(cfg, params, headers);
+      const page = await res.json();
+      rows = rows.concat(page);
+      if (offset === 0) total = parseTotalFromContentRange(res.headers.get('Content-Range'));
+      const dispTotal = q.limit != null ? Math.min(q.limit, total ?? q.limit) : total;
+      const pct = dispTotal ? Math.min(100, (rows.length / dispTotal) * 100) : 100;
+      document.getElementById('dumpFill').style.width = `${pct.toFixed(1)}%`;
+      document.getElementById('dumpSummary').innerHTML = `Fetched <b>${rows.length.toLocaleString()}</b>${dispTotal ? ` of <b>${dispTotal.toLocaleString()}</b>` : ''} rows…`;
+      if (page.length < cap) break;
+      if (q.limit != null && rows.length >= q.limit) break;
+      offset += page.length;
+    }
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    setStatus('ok', 'ok');
+    const ts = new Date().toLocaleTimeString();
+    setOutAux(`dump · ${ts}`);
+    document.getElementById('dumpFill').classList.add('done');
+    document.getElementById('dumpFill').style.width = '100%';
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const dlUrl = URL.createObjectURL(blob);
+    const filename = `vault_dump${q.family ? '_' + q.family : ''}_${new Date().toISOString().slice(0,10)}.json`;
+    document.getElementById('dumpSummary').innerHTML = `
+      Fetched <b>${rows.length.toLocaleString()}</b> rows in <b>${elapsed}s</b><br>
+      <span style="color:#7c8aaa">${escapeHtml(describeFilters(q))}</span><br><br>
+      <a href="${dlUrl}" download="${filename}" style="color:#c8f542;text-decoration:underline">⤓ Download ${filename}</a>
+      &nbsp;&nbsp;<button class="out-mini-btn" id="dumpCopyJson">Copy JSON to clipboard</button>
+    `;
+    document.getElementById('dumpCopyJson').onclick = () => copyToClipboard(JSON.stringify(rows, null, 2), 'Copy JSON');
+  } catch (e) { showError('Full Dump', e); }
+}
+</script>
+
+</body>
+</html>

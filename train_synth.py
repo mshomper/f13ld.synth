@@ -7,7 +7,7 @@ File-mode (reads sweep JSONs from a directory):
     python train_synth.py tpms --from-files ./sweeps --out ./weights/tpms.json
 
 Vault-mode (pulls directly from F13LD.vault — requires vault_client.py
-beside this file, plus VAULT_SUPABASE_URL + VAULT_SUPABASE_ANON_KEY env vars):
+beside this file; the canonical Vault URL and key are built into it):
     python train_synth.py tpms --from-vault --out ./weights/tpms.json
 
 Optional vault-mode filters:
@@ -23,7 +23,8 @@ What it does
    reference parameters (E_solid, sigma_ref, k_solid, cell_mm)
 4. Trains:
      - Validity classifier (Random Forest, all designs) — predicts P(valid)
-     - Metrics regressor   (Random Forest, valid only) — predicts 9 normalized outputs
+     - Metrics regressor   (Random Forest, valid only) — predicts 10 normalized
+       outputs, plus shear moduli when enough rows carry them
 5. Evaluates on a 20% held-out split, reports per-metric R² and residual σ
 6. Exports model + metadata to a single JSON the browser can load
 
@@ -61,19 +62,43 @@ np.random.seed(SEED)
 OUTPUT_METRICS = [
     "volume_fraction",      # ratio, geometry-only
     "ex_norm", "ey_norm", "ez_norm",  # ×modulus_gpa → physical GPa at inference
-    "anisotropy",           # ratio
-    "pore_size_norm",       # ×cell_µm → physical µm at inference
+    "anisotropy",           # ratio — trained directly now, with p1/p99 trim (see TRAIN_LIMITS)
+    "pore_size_p50_norm",   # ×cell_µm → physical µm at inference (median pore — replaces pore_size_norm which was the mean, too heavy-tailed to train cleanly)
     "pore_size_cv",         # ratio
     "keff_avg_norm",        # ×thermal_k_wmk → physical W/mK at inference
     "surface_complexity",   # ratio (Vault percentile-ranks at display)
+    "directionality",       # ratio — connectivity-percolated axis count / 3 (0, 1/3, 2/3, 1)
 ]
 
-# Unified-feature encoding constants — must accommodate the largest known
-# sweep configuration. If sweeps ever exceed these, bump the values and retrain.
+# Metrics computed at synth runtime from already-predicted values rather than
+# trained directly. The op is applied to predictions of `inputs`. Empty by
+# default; populate to move a metric out of direct training (e.g. when a
+# derivation is cleaner than a regressor on a heavy-tailed label).
+DERIVED_METRICS = {}
+
+# Per-metric percentile-based training trims. Rows whose label falls outside
+# [lower_pct, upper_pct] get masked out of THAT metric's training only. Use
+# for heavy-tailed metrics where extreme outliers dominate SS_tot and prevent
+# the regressor from learning the bulk distribution. Other metrics are
+# unaffected. Percentiles are computed once from the training-set ground
+# truth (after NaN/inf filtering) — they reflect the data, not an assumption.
+TRAIN_LIMITS = {
+    "anisotropy": (1, 99),  # full range hits 75+; trim restores bulk distribution
+}
+
+# Optional targets: trained only when enough rows carry them (F13LD.sweep
+# v0.24+ reports shear moduli; older Vault rows don't). Each is normalized by
+# the solid modulus like ex/ey/ez, so it resolves to GPa in Synth.
+OPTIONAL_METRICS = ["gxy_norm", "gxz_norm", "gyz_norm"]
+MIN_OPTIONAL_LABELS = 200
+
+# Unified-feature encoding constants. Synth reads these from the bundle's
+# `encoding` block, so changing them needs a retrain but no Synth edit.
 MODES = ["pi-tpms", "shell", "solid", "level"]   # extend as new modes appear
 TRIG_AXES = ["x", "y", "z"]
-MAX_TERMS = 6      # any single sweep has had at most 5 terms
-MAX_FACTORS = 4    # any single sweep has had at most 3 factors per term
+MAX_TERMS = 10     # Sweep expands lidinoid to 9 terms, F-RD to 6 + a constant
+MAX_FACTORS = 4    # any preset term has at most 3 factors
+TRAINER_VERSION = "0.3.0"
 
 
 # ============================================================
@@ -133,15 +158,19 @@ def load_from_vault(family_filter, since=None, limit=None):
         sys.exit(f"Vault setup error: {e}")
 
     print(f"Querying F13LD.vault for family={family_filter} ...")
+    # include_invalid: pull solver_validity=invalid rows too. They're useless
+    # for metric regression (no usable solver output) but become negative
+    # examples for the validity classifier. Without them, the classifier
+    # has no failure cases and gets skipped (which is what was happening).
     rows = vault.fetch_designs(
         family=family_filter,
-        valid_only=True,
+        valid_only=False,
         exclude_degenerate=True,
         since=since,
         limit=limit,
         verbose=True,
     )
-    print(f"Loaded {len(rows)} valid {family_filter} rows from Vault")
+    print(f"Loaded {len(rows)} {family_filter} rows from Vault (valid+partial+invalid)")
 
     skipped_recipe = 0
     skipped_k_solid = 0
@@ -158,6 +187,23 @@ def load_from_vault(family_filter, since=None, limit=None):
         # Vault flattens these into the recipe blob; rebuild the older shape so
         # the encoder/extractor doesn't need to know data sourced from Vault.
         homog = recipe.get("homogenization") or {}
+        homog = dict(homog)  # local copy so we can patch without mutating recipe
+        # Inject solver_validity from the top-level Vault column. Invalid rows
+        # may not have it in their homogenization block (solver aborted), but
+        # the column is authoritative.
+        row_sv = row.get("solver_validity")
+        if row_sv is not None:
+            homog["solver_validity"] = row_sv
+        # Mirror top-level Vault columns that extract_outputs needs but that
+        # aren't stored in recipe.homogenization. The percentile pore metrics
+        # in particular (pore_size_p10_norm, p50_norm, p90_norm) are top-level
+        # columns added in a newer sweep schema. We pull them into the homog
+        # dict so extract_outputs can read them via b[...] like everything else.
+        for col in ("pore_size_p10_norm", "pore_size_p50_norm", "pore_size_p90_norm",
+                    "directionality", "Gxy_GPa", "Gxz_GPa", "Gyz_GPa",
+                    "Gxy_norm", "Gxz_norm", "Gyz_norm", "solver_version"):
+            if homog.get(col) is None and row.get(col) is not None:
+                homog[col] = row[col]
         design_dict = {
             "design": {
                 "geometry": recipe.get("geometry") or {},
@@ -176,14 +222,26 @@ def load_from_vault(family_filter, since=None, limit=None):
             sigma_ref = homog.get("sigma_ref_GPa")
         cell_mm = row.get("cell_size_mm") or 2  # match file-mode default
         k_solid = _extract_k_solid(row.get("material"))
-        preset = (recipe.get("meta") or {}).get("preset") or row.get("preset", "")
+        preset = ((recipe.get("meta") or {}).get("preset")
+                  or (recipe.get("surface") or {}).get("preset")
+                  or row.get("preset", ""))
 
         if k_solid is None:
-            skipped_k_solid += 1
-            continue
+            # Invalid rows may not have material set; substitute and pass through
+            # for the classifier. Valid/partial rows missing material are real
+            # corruption — drop those.
+            if row_sv == "invalid":
+                k_solid = 0.0
+            else:
+                skipped_k_solid += 1
+                continue
         if e_solid is None or sigma_ref is None:
-            skipped_other += 1
-            continue
+            if row_sv == "invalid":
+                e_solid = e_solid or 0.0
+                sigma_ref = sigma_ref or 0.0
+            else:
+                skipped_other += 1
+                continue
 
         yielded += 1
         yield design_dict, {
@@ -241,6 +299,25 @@ def _extract_k_solid(material_field):
     return None
 
 
+_PRESET_ALIASES = {
+    "gyroid": "gyroid", "schwarzp": "schwarzP", "schwarz p": "schwarzP", "primitive": "schwarzP",
+    "schwarzd": "schwarzD", "schwarz d": "schwarzD", "diamond": "schwarzD", "neovius": "neovius",
+    "iwp": "iwp", "i-wp": "iwp", "fks": "fks", "fischer-koch s": "fks", "fischerkochs": "fks",
+    "splitp": "splitP", "split-p": "splitP", "frd": "frd", "f-rd": "frd",
+    "gyroidharmonic": "gyroidHarmonic", "gyroid-harmonic": "gyroidHarmonic",
+    "primitivec": "primitiveC", "primitive-c (g6)": "primitiveC", "octo": "octo", "octo (g8)": "octo",
+    "pharmonic": "pHarmonic", "p-harmonic": "pHarmonic", "lidinoid": "lidinoid",
+}
+
+
+def _canonical_preset(name):
+    """Preset names as Vault rows have written them → the key F13LD.tpms uses
+    (must match _PRESET_ALIASES in Synth's 10-encoding.js). Unknown → 'custom'."""
+    if not name:
+        return "custom"
+    return _PRESET_ALIASES.get(str(name).strip().lower(), "custom")
+
+
 def _infer_family_from_preset(preset):
     """Map a preset name to its family. Extend as new presets are added."""
     tpms_presets = {"gyroid", "schwarzP", "schwarzD", "lidinoid", "frd", "iwp",
@@ -274,22 +351,35 @@ def encode_design_unified(d):
     feats.append(float(g.get("pipe_radius") or 0))
     feats.append(float(g.get("offset") or 0))
 
+    # geometry-level phase_shift {x,y,z} — used by mode='pi-tpms' to construct
+    # phi_B = phi(r + Delta) from phi_A. Encoded as continuous floats; sweep
+    # grid is eighths (0, 1/8, ... 7/8) but RF doesn't need that constraint.
+    # For non-PI-TPMS rows the recipe holds phase_shift=null → default (0,0,0).
+    ps = g.get("phase_shift") or {}
+    feats.append(float(ps.get("x", 0.0)))
+    feats.append(float(ps.get("y", 0.0)))
+    feats.append(float(ps.get("z", 0.0)))
+
     # normal_weights (default 1,1,1 if absent)
     nw = g.get("normal_weights") or {}
     feats.extend([float(nw.get("wx", 1.0)),
                   float(nw.get("wy", 1.0)),
                   float(nw.get("wz", 1.0))])
 
-    # terms — pad to MAX_TERMS
-    terms = d["design"]["surface"]["terms"]
+    # terms — only terms that are switched on (a term Sweep turned off is
+    # absent from the geometry, so it is absent from the features too),
+    # padded to MAX_TERMS. A term without a per-term phase (PI-TPMS terms,
+    # older sweeps) encodes phase 0, as F13LD.mesh reads it.
+    terms = [t for t in d["design"]["surface"]["terms"] if t.get("on", True)]
     for t_idx in range(MAX_TERMS):
         if t_idx < len(terms):
             term = terms[t_idx]
+            tps = term.get("phase_shift") or {}
             feats.append(1.0)  # term active
             feats.append(float(term["coef"]))
-            feats.append(float(term["phase_shift"]["x"]))
-            feats.append(float(term["phase_shift"]["y"]))
-            feats.append(float(term["phase_shift"]["z"]))
+            feats.append(float(tps.get("x", 0.0)))
+            feats.append(float(tps.get("y", 0.0)))
+            feats.append(float(tps.get("z", 0.0)))
             factors = term["factors"]
             for f_idx in range(MAX_FACTORS):
                 if f_idx < len(factors):
@@ -309,6 +399,13 @@ def encode_design_unified(d):
     return feats
 
 
+def design_overflow(d):
+    """True when a design has more on-terms or factors than the encoder holds
+    (the extra ones would be silently dropped from its features)."""
+    terms = [t for t in d["design"]["surface"]["terms"] if t.get("on", True)]
+    return len(terms) > MAX_TERMS or any(len(t["factors"]) > MAX_FACTORS for t in terms)
+
+
 def _parse_trig(s):
     """e.g. 'sin(x)' -> ('sin','x'); 'cos(z)' -> ('cos','z')"""
     func = "cos" if s.startswith("cos") else "sin"
@@ -317,7 +414,7 @@ def _parse_trig(s):
 
 
 def feature_vector_dim():
-    return len(MODES) + 4 + 3 + MAX_TERMS * (5 + MAX_FACTORS * 8)
+    return len(MODES) + 4 + 3 + 3 + MAX_TERMS * (5 + MAX_FACTORS * 8)
 
 
 # ============================================================
@@ -325,43 +422,71 @@ def feature_vector_dim():
 # ============================================================
 
 def extract_outputs(d, refs):
-    """Compute the 9 geometry-only normalized output values from the design's
-    raw FEA values + the sweep's reference parameters."""
+    """Geometry-only normalized output values from the design's raw solver
+    values + the sweep's reference parameters. Returns {metric: value};
+    a metric the row doesn't carry is NaN, which masks that row out of that
+    metric's training only."""
     b = d["browser"]
-    cell_um = refs["cell_mm"] * 1000.0
+    nan = float("nan")
     keff_avg = (b["keff_x"] + b["keff_y"] + b["keff_z"]) / 3.0
-    return [
-        b["volume_fraction"],
-        b["Ex_GPa"] / refs["E_solid"],
-        b["Ey_GPa"] / refs["E_solid"],
-        b["Ez_GPa"] / refs["E_solid"],
-        b["anisotropy"],
-        b["pore_size"] / cell_um,
-        b["pore_size_cv"],
-        keff_avg / refs["k_solid"],
-        b["surface_complexity"],
-    ]
+    out = {
+        "volume_fraction":    b["volume_fraction"],
+        "ex_norm":            b["Ex_GPa"] / refs["E_solid"],
+        "ey_norm":            b["Ey_GPa"] / refs["E_solid"],
+        "ez_norm":            b["Ez_GPa"] / refs["E_solid"],
+        "anisotropy":         b["anisotropy"] if b.get("anisotropy") is not None else nan,
+        "pore_size_p50_norm": b["pore_size_p50_norm"],
+        "pore_size_cv":       b["pore_size_cv"],
+        "keff_avg_norm":      keff_avg / refs["k_solid"],
+        "surface_complexity": b["surface_complexity"],
+        # some older rows lack directionality
+        "directionality":     b["directionality"] if b.get("directionality") is not None else nan,
+    }
+    # Shear (F13LD.sweep v0.24+): prefer GPa / E_solid so it is normalized
+    # exactly like ex/ey/ez; fall back to the sweep's own *_norm column.
+    for axis in ("xy", "xz", "yz"):
+        g = b.get(f"G{axis}_GPa")
+        if g is not None and refs["E_solid"]:
+            out[f"g{axis}_norm"] = g / refs["E_solid"]
+        elif b.get(f"G{axis}_norm") is not None:
+            out[f"g{axis}_norm"] = b[f"G{axis}_norm"]
+        else:
+            out[f"g{axis}_norm"] = nan
+    return out
 
 
 # ============================================================
 # TRAINING
 # ============================================================
 
-def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_source=None):
-    print(f"\n=== F13LD.Synth trainer · family={family} ===")
-    print(f"Hyperparameters: n_estimators={n_estimators}, threshold_precision={decimals} decimals")
+def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_source=None,
+          max_norm=1.3, n_seeds=600, solver_version=None):
+    print(f"\n=== F13LD.Synth trainer v{TRAINER_VERSION} · family={family} ===")
+    print(f"Hyperparameters: n_estimators={n_estimators}, threshold_precision={decimals} decimals, "
+          f"max_terms={MAX_TERMS}, max_factors={MAX_FACTORS}, outlier cutoff={max_norm}")
     if data_source:
         print(f"Data source: {data_source}")
+    if solver_version:
+        print(f"Keeping only rows whose solver_version starts with '{solver_version}'")
 
-    X, Y_metrics, y_validity, sources = [], [], [], []
-    # Track validity-state and outlier counts so the load step is auditable.
-    n_outliers = 0
+    X, out_dicts, y_validity, sources, presets = [], [], [], [], []
+    # Track every reason a row is dropped or changed so the load is auditable.
+    n_outliers = n_encode_fail = n_overflow = n_solver_skip = 0
     validity_counts = {}
     for d, refs in design_iter:
+        if solver_version:
+            sv_str = str(d["browser"].get("solver_version") or "")
+            if not sv_str.startswith(solver_version):
+                n_solver_skip += 1
+                continue
         try:
-            X.append(encode_design_unified(d))
-        except Exception as e:
+            x = encode_design_unified(d)
+        except Exception:
+            n_encode_fail += 1
             continue
+        if design_overflow(d):
+            n_overflow += 1
+        X.append(x)
         sv = d["browser"].get("solver_validity")
         validity_counts[sv] = validity_counts.get(sv, 0) + 1
         # "valid" rows have all axes from the solver. "partial" rows have one
@@ -370,30 +495,40 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         # missing data, so partial rows are usable training signal too.
         is_valid = sv in ("valid", "partial")
         y_validity.append(1 if is_valid else 0)
+        outputs = None
         if is_valid:
             try:
                 outputs = extract_outputs(d, refs)
-                # FFT-CG axial-only solver naturally lands ratios up to ~1.10
-                # (no shear relaxation = ~10% over-estimation per axis).
-                # Threshold of 1.3 allows that physical noise + headroom but
-                # catches corrupted-row outliers (the ex_norm ~10× values that
-                # poisoned v0.1's Vault retraining).
-                ex_n, ey_n, ez_n = outputs[1], outputs[2], outputs[3]
-                keff_n = outputs[7]
-                if max(ex_n, ey_n, ez_n) > 1.3 or keff_n > 1.3:
+                # The FFT-CG axial-only solver behind the current Vault data
+                # lands ratios up to ~1.10 (no shear relaxation). The cutoff
+                # allows that plus headroom but catches corrupted rows (the
+                # ex_norm ~10x values that poisoned v0.1's Vault retraining).
+                # Data from Sweep's newer GPU solver may warrant a tighter one.
+                if max(outputs["ex_norm"], outputs["ey_norm"], outputs["ez_norm"]) > max_norm \
+                        or outputs["keff_avg_norm"] > max_norm:
                     y_validity[-1] = 0
-                    Y_metrics.append([0.0] * len(OUTPUT_METRICS))
+                    outputs = None
                     n_outliers += 1
-                else:
-                    Y_metrics.append(outputs)
             except Exception:
-                # If we can't extract outputs (e.g. missing fields), drop from
-                # metrics training but keep in validity training set
+                # Missing fields: drop from metrics training, keep for validity
                 y_validity[-1] = 0
-                Y_metrics.append([0.0] * len(OUTPUT_METRICS))
-        else:
-            Y_metrics.append([0.0] * len(OUTPUT_METRICS))  # placeholder; not used
+                outputs = None
+        out_dicts.append(outputs)
         sources.append(refs.get("source_file", ""))
+        presets.append(_canonical_preset(refs.get("preset")))
+
+    # Which targets this bundle trains: the core set, plus any optional
+    # target enough rows carry.
+    metrics = list(OUTPUT_METRICS)
+    for m in OPTIONAL_METRICS:
+        n_have = sum(1 for o in out_dicts if o is not None and np.isfinite(o.get(m, float("nan"))))
+        if n_have >= MIN_OPTIONAL_LABELS:
+            metrics.append(m)
+            print(f"  Optional target {m}: {n_have} rows carry it — training it")
+        elif n_have > 0:
+            print(f"  Optional target {m}: only {n_have} rows carry it (need {MIN_OPTIONAL_LABELS}) — skipped")
+    nan = float("nan")
+    Y_metrics = [[(o.get(m, nan) if o is not None else 0.0) for m in metrics] for o in out_dicts]
 
     X = np.array(X, dtype=np.float32)
     Y_metrics = np.array(Y_metrics, dtype=np.float32)
@@ -408,7 +543,20 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         breakdown = ", ".join(f"{k or 'null'}={v}" for k, v in sorted(validity_counts.items(), key=lambda kv: -kv[1]))
         print(f"  solver_validity breakdown: {breakdown}")
     if n_outliers > 0:
-        print(f"  Dropped {n_outliers} rows for normalized stiffness/thermal > 1.3 (likely data corruption)")
+        print(f"  Dropped {n_outliers} rows for normalized stiffness/thermal > {max_norm} (likely data corruption)")
+    if n_encode_fail:
+        print(f"  Skipped {n_encode_fail} rows whose recipe could not be encoded")
+    if n_solver_skip:
+        print(f"  Skipped {n_solver_skip} rows from other solver versions")
+    if n_overflow:
+        print(f"  WARNING: {n_overflow} rows have more terms/factors than the encoder holds "
+              f"(max_terms={MAX_TERMS}, max_factors={MAX_FACTORS}); their extra terms are not seen. "
+              f"Raise --max-terms.")
+    preset_counts = {}
+    for i, pz in enumerate(presets):
+        if y_validity[i] == 1:
+            preset_counts[pz] = preset_counts.get(pz, 0) + 1
+    print("  usable rows by preset: " + ", ".join(f"{k}={v}" for k, v in sorted(preset_counts.items(), key=lambda kv: -kv[1])))
 
     # Split — stratified on validity if mixed, simple otherwise
     if 0.05 < y_validity.mean() < 0.95:
@@ -452,7 +600,13 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
     test_r2 = {}
     test_sigma = {}
     knn_r2 = {}
-    for i, mname in enumerate(OUTPUT_METRICS):
+    for i, mname in enumerate(metrics):
+        # Derived metrics don't have their own RF — they're computed from other
+        # metrics' predictions at synth runtime. Skip training, leave a None
+        # placeholder, evaluate after the trained loop completes.
+        if mname in DERIVED_METRICS:
+            regressors.append(None)
+            continue
         # Per-metric NaN/inf filter. Most metrics are well-defined for both
         # 'valid' and 'partial' rows, but anisotropy = max(E)/min(E) blows up
         # to inf or NaN whenever a partial row has a zero-stiffness axis (the
@@ -462,6 +616,24 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         tr_mask = np.isfinite(Ym_tr[:, i])
         te_mask = np.isfinite(Ym_te[:, i])
         n_drop = int((~tr_mask).sum() + (~te_mask).sum())
+        # Per-metric percentile trim. Heavy-tailed metrics (e.g. anisotropy with
+        # max=75 dominated by p99≈25) train poorly because the RF can't predict
+        # the rare tail and SS_tot is dominated by it. Trim defined in TRAIN_LIMITS.
+        # Percentiles computed from the NaN-filtered TRAINING labels only — test
+        # set then trimmed using those same bounds (so the model is judged on
+        # the same distribution it was trained on).
+        n_trim = 0
+        if mname in TRAIN_LIMITS:
+            p_lo, p_hi = TRAIN_LIMITS[mname]
+            tr_labels_finite = Ym_tr[tr_mask, i]
+            lo_val = float(np.percentile(tr_labels_finite, p_lo))
+            hi_val = float(np.percentile(tr_labels_finite, p_hi))
+            tr_in_range = (Ym_tr[:, i] >= lo_val) & (Ym_tr[:, i] <= hi_val)
+            te_in_range = (Ym_te[:, i] >= lo_val) & (Ym_te[:, i] <= hi_val)
+            n_trim = int(((tr_mask & ~tr_in_range).sum() +
+                          (te_mask & ~te_in_range).sum()))
+            tr_mask = tr_mask & tr_in_range
+            te_mask = te_mask & te_in_range
         Xm_tr_i = Xm_tr[tr_mask]
         Ym_tr_i = Ym_tr[tr_mask, i]
         Xm_te_i = Xm_te[te_mask]
@@ -491,8 +663,66 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
         test_sigma[mname] = sigma
         knn_r2[mname] = float(r2_k)
         verdict = "✓" if r2 > r2_k else "·"
-        drop_note = f"   (dropped {n_drop} NaN/inf)" if n_drop > 0 else ""
-        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}{drop_note}")
+        notes = []
+        if n_drop > 0: notes.append(f"dropped {n_drop} NaN/inf")
+        if n_trim > 0:
+            p_lo, p_hi = TRAIN_LIMITS[mname]
+            notes.append(f"trimmed {n_trim} outside p{p_lo}-p{p_hi}")
+        note_str = f"   ({'; '.join(notes)})" if notes else ""
+        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}{note_str}")
+
+    # Evaluate derived metrics using the trained regressors. For each derived
+    # metric, predict its inputs on the test set, apply the op, compare to
+    # ground truth. Same R²/σ math as trained metrics so the bell sparkline
+    # and scoring use comparable yardsticks.
+    for mname, spec in DERIVED_METRICS.items():
+        i = metrics.index(mname)
+        te_mask = np.isfinite(Ym_te[:, i])
+        n_drop_te = int((~te_mask).sum())
+        if te_mask.sum() < 2:
+            test_r2[mname] = float("nan")
+            test_sigma[mname] = float("nan")
+            knn_r2[mname] = float("nan")
+            print(f"  {mname:<22} SKIPPED — insufficient finite ground truth (n={int(te_mask.sum())})")
+            continue
+        Xm_te_d = Xm_te[te_mask]
+        Ym_te_d = Ym_te[te_mask, i]
+        # Get input predictions on the derived metric's test rows
+        input_arrs = []
+        for inp_name in spec["inputs"]:
+            inp_i = metrics.index(inp_name)
+            if regressors[inp_i] is None:
+                sys.exit(f"Derived metric '{mname}' depends on '{inp_name}' which has no trained regressor.")
+            input_arrs.append(regressors[inp_i].predict(Xm_te_d))
+        # Apply the op
+        if spec["op"] == "max_over_min":
+            floor = spec.get("floor", 0.01)
+            stacked = np.stack(input_arrs, axis=1)
+            y_pred = stacked.max(axis=1) / np.maximum(stacked.min(axis=1), floor)
+        else:
+            sys.exit(f"Unknown derived op '{spec['op']}' for metric '{mname}'")
+        residuals = Ym_te_d - y_pred
+        ss_tot = ((Ym_te_d - Ym_te_d.mean()) ** 2).sum()
+        ss_res = (residuals ** 2).sum()
+        r2 = 1 - ss_res / max(ss_tot, 1e-12)
+        sigma = float(np.std(residuals))
+        # KNN baseline on ground-truth labels (apples-to-apples with trained metrics)
+        tr_mask = np.isfinite(Ym_tr[:, i])
+        if tr_mask.sum() >= 5:
+            knn = KNeighborsRegressor(n_neighbors=min(5, int(tr_mask.sum())-1)).fit(
+                Xm_tr[tr_mask], Ym_tr[tr_mask, i]
+            )
+            knn_pred = knn.predict(Xm_te_d)
+            ss_res_k = ((Ym_te_d - knn_pred) ** 2).sum()
+            r2_k = 1 - ss_res_k / max(ss_tot, 1e-12)
+        else:
+            r2_k = float("nan")
+        test_r2[mname] = float(r2)
+        test_sigma[mname] = sigma
+        knn_r2[mname] = float(r2_k)
+        verdict = "✓" if (not np.isnan(r2_k) and r2 > r2_k) else "·"
+        drop_note = f"   (dropped {n_drop_te} NaN/inf)" if n_drop_te > 0 else ""
+        print(f"  {mname:<22} R² = {r2:>+6.3f}   σ_resid = {sigma:>7.4f}   (KNN baseline {r2_k:>+6.3f}) {verdict}{drop_note}   [DERIVED]")
 
     mean_r2 = float(np.mean(list(test_r2.values())))
     mean_knn = float(np.mean(list(knn_r2.values())))
@@ -500,19 +730,31 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
     if mean_r2 < mean_knn:
         print("WARNING: Model is worse than KNN baseline. Consider more data or feature changes.")
 
-    # ----- Pick seed samples for browser-side candidate generation ----
-    # Browser samples candidates by perturbing these seeds with small Gaussian
-    # noise — keeps the search near training distribution so predictions stay
-    # reliable. Uniform [lo, hi] sampling in 233-D would be mostly OOD.
-    n_seeds = min(200, len(Xm_tr))
-    seed_idx = np.random.RandomState(SEED).choice(len(Xm_tr), n_seeds, replace=False)
-    seed_samples = np.round(Xm_tr[seed_idx], decimals=4).tolist()
+    # ----- Seed samples for browser-side candidate generation ----
+    # Synth grows candidates by mutating these real training designs, and
+    # its preset filter picks seeds by preset — so seeds are drawn evenly
+    # across presets (every preset gets a fair share, small ones in full).
+    rs = np.random.RandomState(SEED)
+    by_preset = {}
+    for row_i in valid_in_tr:
+        by_preset.setdefault(presets[row_i], []).append(row_i)
+    budget = min(n_seeds, len(valid_in_tr))
+    chosen = []
+    groups = sorted(by_preset.items(), key=lambda kv: len(kv[1]))
+    for gi, (pz, rows) in enumerate(groups):
+        share = (budget - len(chosen)) // (len(groups) - gi)
+        take = rs.choice(rows, min(share, len(rows)), replace=False).tolist()
+        chosen.extend(take)
+    seed_samples = np.round(X[chosen], decimals=4).tolist()
+    seed_presets = [presets[i] for i in chosen]
+    print(f"\nSeeds: {len(chosen)} across {len(by_preset)} presets")
 
     # Export bundle
     bundle = {
         "meta": {
             "family": family,
-            "version": "0.1.0",
+            "version": "0.2.0",
+            "trainer_version": TRAINER_VERSION,
             "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "data_source": data_source or "unknown",
             "n_designs_total": int(len(X)),
@@ -520,22 +762,29 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
             "n_metrics_train": int(len(valid_in_tr)),
             "n_metrics_test": int(len(valid_in_te)),
             "feature_dim": int(X.shape[1]),
+            "n_overflow": int(n_overflow),
+            "max_norm": float(max_norm),
+            "solver_version": solver_version,
         },
         "encoding": {
             "modes": MODES,
             "trig_axes": TRIG_AXES,
             "max_terms": MAX_TERMS,
             "max_factors": MAX_FACTORS,
+            # v0.2.0 bundles encode only switched-on terms; older bundles
+            # encoded every listed term. Synth reads this.
+            "term_semantics": "on_terms",
         },
         "input_norm": {"lo": in_lo.tolist(), "hi": in_hi.tolist()},
-        "output_metrics": OUTPUT_METRICS,
+        "output_metrics": metrics,
         "output_ranges": {
             m: {"min": float(np.nanmin(Ym_tr[:, i])), "max": float(np.nanmax(Ym_tr[:, i]))}
-            for i, m in enumerate(OUTPUT_METRICS)
+            for i, m in enumerate(metrics)
         },
         "validity_model": _serialize_rf_classifier(clf, decimals=decimals) if clf is not None else None,
-        "metrics_model": [_serialize_rf_regressor(rf, decimals=decimals) for rf in regressors],
+        "metrics_model": [_serialize_metric_model(r, metrics[i], decimals=decimals) for i, r in enumerate(regressors)],
         "seed_samples": seed_samples,
+        "seed_presets": seed_presets,
         "eval": {
             "validity": val_meta,
             "metrics_test_r2": test_r2,
@@ -563,6 +812,17 @@ def _serialize_rf_classifier(clf, decimals=4):
         "classes": clf.classes_.tolist(),
         "trees": [_serialize_tree(t.tree_, classifier=True, decimals=decimals) for t in clf.estimators_],
     }
+
+
+def _serialize_metric_model(entry, mname, decimals=4):
+    """Wrap a regressors[] entry for bundle export. Trained metrics get the
+    full RF serialization; derived metrics emit their op spec instead."""
+    if entry is None:
+        spec = DERIVED_METRICS.get(mname)
+        if spec is None:
+            raise ValueError(f"Metric '{mname}' has no regressor and no derived spec.")
+        return {"kind": "derived", **spec}
+    return _serialize_rf_regressor(entry, decimals=decimals)
 
 
 def _serialize_rf_regressor(rf, decimals=4):
@@ -607,6 +867,7 @@ def _serialize_tree(t, classifier=False, decimals=4):
 # ============================================================
 
 def main():
+    global MAX_TERMS
     p = argparse.ArgumentParser(description="F13LD.Synth offline trainer (Pattern A)")
     p.add_argument("family", choices=["tpms", "noise", "grain"],
                    help="Which family to train. The trainer pulls all designs in this family.")
@@ -625,7 +886,16 @@ def main():
                    help="(vault-mode) only fetch designs created on/after this date")
     p.add_argument("--limit", type=int, default=None,
                    help="(vault-mode) cap on rows fetched, useful for quick test runs")
+    p.add_argument("--max-terms", type=int, default=MAX_TERMS,
+                   help=f"term slots in the feature vector (default {MAX_TERMS}; Synth reads it from the bundle)")
+    p.add_argument("--max-norm", type=float, default=1.3,
+                   help="drop rows whose normalized stiffness or thermal exceeds this (default 1.3)")
+    p.add_argument("--n-seeds", type=int, default=600,
+                   help="training designs exported as search seeds, spread across presets (default 600)")
+    p.add_argument("--solver-version", default=None, metavar="PREFIX",
+                   help="keep only rows whose solver_version starts with PREFIX (for a Vault holding mixed solvers)")
     args = p.parse_args()
+    MAX_TERMS = args.max_terms
 
     if args.from_files:
         design_iter = load_from_files(args.from_files, args.family)
@@ -641,7 +911,8 @@ def main():
 
     train(args.family, design_iter, args.out,
           n_estimators=args.n_estimators, decimals=args.decimals,
-          data_source=data_source)
+          data_source=data_source, max_norm=args.max_norm,
+          n_seeds=args.n_seeds, solver_version=args.solver_version)
 
 
 if __name__ == "__main__":
