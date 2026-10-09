@@ -113,6 +113,7 @@ async function runSearch(){
     res = await Predictor.inverseSearch(req, {
       depth: SYNTH.depth,
       shouldStop: () => SYNTH.stopFlag,
+      onCheck: () => statusSet('run', 'checking the shapes of the best designs…', 1),
       onRound: info => {
         for(const p of info.pts) mapAddPoints(p);
         MAP.round = info.round;
@@ -133,7 +134,9 @@ async function runSearch(){
     mapSetGoals(SYNTH.results.map(r => r.metrics));
     const ended = { settled: 'settled', time: 'time limit', stopped: 'stopped' }[res.ended] || res.ended;
     const best = Math.max(...SYNTH.results.map(r => r.score));
-    statusSet('done', `<b>${res.stats.scanned.toLocaleString()} designs</b> · ${res.rounds} rounds · ${res.seconds.toFixed(1)} s · ${ended} · best ${Math.round(best * 100)}%`, 1);
+    const off = SYNTH.results.filter(r => r.shape && r.shape.level).length;
+    statusSet('done', `<b>${res.stats.scanned.toLocaleString()} designs</b> · ${res.rounds} rounds · ${res.seconds.toFixed(1)} s · ${ended} · best ${Math.round(best * 100)}%` +
+      (off ? ` · ${off} shape${off > 1 ? 's' : ''} differ from the model` : ''), 1);
     document.getElementById('nScored').textContent = `8 of ${res.stats.scanned.toLocaleString()} scored`;
   } else {
     const why = res.reason === 'error' ? 'search failed — see the console'

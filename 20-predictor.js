@@ -52,7 +52,7 @@ const Predictor = {
   },
 
   // req: {targets, weights, connectivity, presetKey, grid, ptsKeys}
-  // opts: {depth: 'quick'|'wide'|'deep', onRound(info), shouldStop()}
+  // opts: {depth: 'quick'|'wide'|'deep', onRound(info), onCheck(), shouldStop()}
   async inverseSearch(req, opts){
     if(!this.loaded) return { results: [], reason: 'no-model' };
     opts = opts || {};
@@ -66,6 +66,10 @@ const Predictor = {
       now: () => performance.now()
     });
     if(res.final.length){
+      if(opts.onCheck) opts.onCheck();
+      res.final = await this.shapeCheck(res.shortlist || res.final, req);
+    }
+    if(res.final.length){
       const top = res.final[0];
       const zStr = Object.entries(top.zPerMetric).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
         .map(([k, z]) => `${k}: ${z >= 0 ? '+' : ''}${z.toFixed(2)}σ`).join('  ·  ');
@@ -77,6 +81,19 @@ const Predictor = {
     }
     return { results: res.final.map(c => this.toResult(c)), reason: res.final.length ? 'ok' : (res.reason === 'empty-preset' ? 'empty-preset' : 'none'),
              stats: res.stats, rounds: res.rounds, seconds: res.seconds, ended: res.reason, workers: this.pool ? W : 0 };
+  },
+
+  // Measure the solid fraction of the shortlist from the shape itself (GPU),
+  // apply SynthSearch.shapeCheck, and pick the final eight again.
+  async shapeCheck(list, req){
+    if(typeof rmMeasureSolidAll !== 'function' || !this.ctx.sigmas.volume_fraction) return list.slice(0, 8);
+    const t0 = performance.now();
+    const vf = await rmMeasureSolidAll(list.map(c => c.design));
+    if(vf.every(v => v == null)) return list.slice(0, 8);
+    const checked = list.map((c, i) => SynthSearch.shapeCheck(this.ctx, req, c, vf[i]));
+    const off = checked.filter(c => c.shape && c.shape.level > 0).length;
+    console.info(`[F13LD.synth] Shape check: ${checked.length} designs measured in ${((performance.now() - t0) / 1000).toFixed(1)}s · ${off} differ from the model by more than ${SynthSearch.SHAPE_CHECK.warnZ}σ in solid fraction`);
+    return SynthSearch.pickFinal(checked, 8, 2);
   },
 
   async runJobs(jobs){
@@ -94,7 +111,8 @@ const Predictor = {
   },
 
   toResult(c){
-    const conf = SynthSearch.confidenceLabel(c.spreadRatio);
+    const conf = c.confidence || SynthSearch.confidenceLabel(c.spreadRatio);
+    const predicted = c.shape ? Object.assign({}, c.pred, { volume_fraction: c.shape.predicted }) : c.pred;
     const presetKey = c.presetKey;
     const recipe = SynthEncoding.toRecipe(c.design, {
       presetKey: presetKey.indexOf('|') < 0 ? presetKey : null,
@@ -104,12 +122,13 @@ const Predictor = {
         model: { family: this.meta.family, version: this.meta.version, trained_at: this.meta.trained_at, n_valid: this.meta.n_valid },
         seed_index: c.seedIndex, seed_preset: presetKey,
         score: +c.score.toFixed(4), validity: +c.validity.toFixed(4), confidence: conf,
-        predicted: Object.fromEntries(Object.entries(c.pred).map(([k, v]) => [k, +v.toFixed(5)]))
+        predicted: Object.fromEntries(Object.entries(predicted).map(([k, v]) => [k, +v.toFixed(5)])),
+        ...(c.shape ? { measured: { volume_fraction: +c.shape.measured.toFixed(2) } } : {})
       }
     });
     return { metrics: c.pred, spread: c.spread, zRms: c.zRms, score: c.score, validity: c.validity,
              zPerMetric: c.zPerMetric, spreadRatio: c.spreadRatio, confidence: conf,
-             presetKey, seedIndex: c.seedIndex, design: c.design, recipe };
+             presetKey, seedIndex: c.seedIndex, design: c.design, recipe, shape: c.shape || null };
   }
 };
 

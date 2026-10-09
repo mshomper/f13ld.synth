@@ -16,7 +16,7 @@
 
 ## Testing
 - `node tests/roundtrip.js` · `node tests/forest-parity.js` · `node tests/search-smoke.js` · `node tests/loadorder.js`
-- `node tests/mesh-parity.js ../f13ld.mesh` builds Synth results with Mesh's own field code.
+- `node tests/mesh-parity.js ../f13ld.mesh` builds Synth results with Mesh's own field code and shows what the shape check does to each.
 - `python3 tests/preview-parity.py ../f13ld.mesh` checks the 3-D preview's field against Mesh's on the GPU.
 - `python3 tests/page-check.py` loads the page in headless Chromium (Playwright, software WebGL): searches, preset filter, Stop, preview, thumbnails, phone overflow.
 - `python3 tests/trainer-smoke.py SEED_RECIPES.json OUT.json` runs the trainer against a fake Vault.

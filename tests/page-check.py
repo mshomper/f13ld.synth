@@ -1,6 +1,6 @@
 """Dev-only page check: serves the repo, loads Synth in headless Chromium
 (software WebGL), runs a search, a preset-filtered search and a stopped
-search, checks the preview and thumbnails render, checks the phone layout
+search, checks the shape check measured every result, checks the preview and thumbnails render, checks the phone layout
 has no sideways overflow, and saves screenshots.
 
     python3 tests/page-check.py [port] [out-dir]
@@ -38,6 +38,13 @@ def run(pg):
         const o = document.createElement('canvas'); o.width = c.width; o.height = c.height; const x = o.getContext('2d'); x.drawImage(c, 0, 0);
         const d = x.getImageData(0, 0, o.width, o.height).data; let lit = 0; for(let i = 0; i < d.length; i += 4) if(d[i+1] > 90) lit++; return lit / (d.length / 4); })()""")
     print(f'preview: {lit*100:.1f}% of pixels show surface')
+    sh = pg.evaluate("SYNTH.results.map(r => r.shape ? [+r.shape.measured.toFixed(1), +r.shape.predicted.toFixed(1), r.shape.level, r.confidence] : null)")
+    print('shape check (measured, predicted, level, confidence):', sh)
+    if any(x is None for x in sh): problems.append('shape check did not measure every result')
+    flagged = pg.evaluate("SYNTH.results.findIndex(r => r.shape && r.shape.level)")
+    if flagged >= 0:
+        pg.click(f'.cand[data-i="{flagged}"]'); pg.wait_for_timeout(800)
+        pg.screenshot(path=os.path.join(out, 'page-shape-flag.png'))
     if lit < 0.02: problems.append('preview looks empty')
     pg.screenshot(path=os.path.join(out, 'page-check.png'))
     # select via a tile, sort, map ring numbers stay consistent

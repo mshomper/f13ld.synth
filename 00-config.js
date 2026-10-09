@@ -5,7 +5,7 @@
    ============================================================ */
 'use strict';
 
-const F13LD_SYNTH_VERSION = '0.4.0';
+const F13LD_SYNTH_VERSION = '0.4.1';
 
 // Model bundles. The relative path is what GitHub Pages serves; the absolute
 // one lets the single-file preview build (opened outside the site) load the

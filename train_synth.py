@@ -98,7 +98,7 @@ MODES = ["pi-tpms", "shell", "solid", "level"]   # extend as new modes appear
 TRIG_AXES = ["x", "y", "z"]
 MAX_TERMS = 10     # Sweep expands lidinoid to 9 terms, F-RD to 6 + a constant
 MAX_FACTORS = 4    # any preset term has at most 3 factors
-TRAINER_VERSION = "0.3.0"
+TRAINER_VERSION = "0.3.1"
 
 
 # ============================================================
@@ -173,7 +173,7 @@ def load_from_vault(family_filter, since=None, limit=None):
     print(f"Loaded {len(rows)} {family_filter} rows from Vault (valid+partial+invalid)")
 
     skipped_recipe = 0
-    skipped_k_solid = 0
+    no_k_solid = 0
     skipped_other = 0
     yielded = 0
 
@@ -226,15 +226,13 @@ def load_from_vault(family_filter, since=None, limit=None):
                   or (recipe.get("surface") or {}).get("preset")
                   or row.get("preset", ""))
 
-        if k_solid is None:
-            # Invalid rows may not have material set; substitute and pass through
-            # for the classifier. Valid/partial rows missing material are real
-            # corruption — drop those.
-            if row_sv == "invalid":
-                k_solid = 0.0
-            else:
-                skipped_k_solid += 1
-                continue
+        if k_solid is None or k_solid == 0:
+            # No solid thermal conductivity: the row still trains every other
+            # metric and the validity classifier; only keff_avg_norm (which
+            # needs k_solid to normalize) is masked out for it.
+            k_solid = None
+            if row_sv != "invalid":
+                no_k_solid += 1
         if e_solid is None or sigma_ref is None:
             if row_sv == "invalid":
                 e_solid = e_solid or 0.0
@@ -246,21 +244,22 @@ def load_from_vault(family_filter, since=None, limit=None):
         yielded += 1
         yield design_dict, {
             "E_solid": float(e_solid),
-            "k_solid": float(k_solid),
+            "k_solid": float(k_solid) if k_solid is not None else None,
             "sigma_ref": float(sigma_ref),
             "cell_mm": float(cell_mm),
             "source_file": "vault",
             "preset": preset,
         }
 
-    if skipped_recipe + skipped_k_solid + skipped_other > 0:
+    if skipped_recipe + skipped_other > 0:
         print(
             f"  Skipped during adapt: "
             f"{skipped_recipe} unparseable recipe · "
-            f"{skipped_k_solid} no k_solid · "
             f"{skipped_other} missing E_solid/sigma_ref"
         )
-    if skipped_k_solid > 0 and skipped_k_solid == len(rows):
+    if no_k_solid:
+        print(f"  {no_k_solid} usable rows have no k_solid — kept; thermal (keff_avg_norm) is masked for them")
+    if no_k_solid > 0 and no_k_solid == len(rows):
         print(
             "  ALL rows missing k_solid — `material` column may be a name string "
             "rather than a JSON dict. Add a materials lookup or update ingest."
@@ -428,7 +427,8 @@ def extract_outputs(d, refs):
     metric's training only."""
     b = d["browser"]
     nan = float("nan")
-    keff_avg = (b["keff_x"] + b["keff_y"] + b["keff_z"]) / 3.0
+    keffs = [b.get(k) for k in ("keff_x", "keff_y", "keff_z")]
+    keff_avg = sum(keffs) / 3.0 if all(v is not None for v in keffs) else nan
     out = {
         "volume_fraction":    b["volume_fraction"],
         "ex_norm":            b["Ex_GPa"] / refs["E_solid"],
@@ -437,7 +437,7 @@ def extract_outputs(d, refs):
         "anisotropy":         b["anisotropy"] if b.get("anisotropy") is not None else nan,
         "pore_size_p50_norm": b["pore_size_p50_norm"],
         "pore_size_cv":       b["pore_size_cv"],
-        "keff_avg_norm":      keff_avg / refs["k_solid"],
+        "keff_avg_norm":      keff_avg / refs["k_solid"] if refs.get("k_solid") else nan,
         "surface_complexity": b["surface_complexity"],
         # some older rows lack directionality
         "directionality":     b["directionality"] if b.get("directionality") is not None else nan,
@@ -504,6 +504,7 @@ def train(family, design_iter, out_path, n_estimators=150, decimals=4, data_sour
                 # allows that plus headroom but catches corrupted rows (the
                 # ex_norm ~10x values that poisoned v0.1's Vault retraining).
                 # Data from Sweep's newer GPU solver may warrant a tighter one.
+                # (a masked NaN thermal value compares False, so it never trips this)
                 if max(outputs["ex_norm"], outputs["ey_norm"], outputs["ez_norm"]) > max_norm \
                         or outputs["keff_avg_norm"] > max_norm:
                     y_validity[-1] = 0

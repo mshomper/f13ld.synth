@@ -235,3 +235,40 @@ function synthThumbnails(designs, size, onEach){
     }, 0);
   })), Promise.resolve()).then(() => urls);
 }
+
+// ── Shape check: solid fraction measured from the shape ─────────────────────
+// The design's own field (the one tests/preview-parity.py checks against
+// F13LD.mesh) is sampled at the centres of an N³ grid over one cell on the
+// GPU; one pixel per sample. Returns percent solid, or null without WebGL2.
+let RM_MEASURE = null;
+function rmMeasureSolid(design, N){
+  N = N || 48;
+  if(!RM_MEASURE){ const c = document.createElement('canvas'); RM_MEASURE = { canvas: c, gl: rmContext(c) }; }
+  const M = RM_MEASURE, gl = M.gl;
+  if(!gl) return null;
+  M.canvas.width = N; M.canvas.height = N * N;
+  const fs = '#version 300 es\nprecision highp float;out vec4 o;\n' + rmFieldGLSL(design).glsl +
+    '\nvoid main(){ float N=' + rmFloat(N) + '; vec2 f=floor(gl_FragCoord.xy); float i=f.x, j=mod(f.y,N), k=floor(f.y/N);' +
+    ' vec3 p=-3.14159265+(vec3(i,j,k)+0.5)*6.2831853/N; o=vec4(implicit(p)<0.0?1.0:0.0,0.0,0.0,1.0); }';
+  const prog = rmProgram(gl, fs);
+  gl.useProgram(prog.p);
+  gl.enableVertexAttribArray(prog.loc);
+  gl.vertexAttribPointer(prog.loc, 2, gl.FLOAT, false, 0, 0);
+  gl.viewport(0, 0, N, N * N);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  const px = new Uint8Array(N * N * N * 4);
+  gl.readPixels(0, 0, N, N * N, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  gl.deleteProgram(prog.p);
+  let n = 0;
+  for(let q = 0; q < px.length; q += 4) if(px[q] > 127) n++;
+  return 100 * n / (N * N * N);
+}
+// All designs, yielding between them so the page stays live.
+async function rmMeasureSolidAll(designs, N){
+  const out = [];
+  for(const d of designs){
+    try { out.push(rmMeasureSolid(d, N)); } catch(e){ out.push(null); console.warn('[F13LD.synth] shape check failed:', e.message); }
+    await new Promise(r => setTimeout(r, 0));
+  }
+  return out;
+}

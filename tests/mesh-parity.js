@@ -1,6 +1,7 @@
 // node tests/mesh-parity.js [path to f13ld.mesh] — builds Synth results with
 // F13LD.mesh's own TPMS field code (worker/m20-sdf-noise-tpms.js) and checks
-// the solid volume fraction Mesh would build against Synth's prediction.
+// the solid volume fraction Mesh would build against Synth's prediction, and
+// what the shape check (SynthSearch.shapeCheck) does to each one's confidence.
 // Needs the f13ld.mesh repo checked out beside this one (or its path).
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -33,12 +34,14 @@ intents.forEach((targets, ii) => {
       const p = [-5 + (i + .5) * 10 / N, -5 + (j + .5) * 10 / N, -5 + (k + .5) * 10 / N];
       if(sdf(p) < 0) inside++;
     }
-    rows.push({ mode: c.design.mode, preset: c.presetKey, built: 100 * inside / (N*N*N), predicted: c.pred.volume_fraction });
+    const built = 100 * inside / (N*N*N), checked = SS.shapeCheck(ctx, { targets, weights }, c, built);
+    rows.push({ mode: c.design.mode, preset: c.presetKey, built, predicted: c.pred.volume_fraction,
+                conf: SS.confidenceLabel(c.spreadRatio), after: checked.confidence });
   }
 });
 let worst = 0;
 for(const r of rows){
   const d = r.built - r.predicted; worst = Math.max(worst, Math.abs(d));
-  console.log(`${r.mode.padEnd(8)} ${r.preset.padEnd(14)} built ${r.built.toFixed(1).padStart(5)}%  predicted ${r.predicted.toFixed(1).padStart(5)}%  diff ${d >= 0 ? '+' : ''}${d.toFixed(1)}`);
+  console.log(`${r.mode.padEnd(8)} ${r.preset.padEnd(14)} built ${r.built.toFixed(1).padStart(5)}%  predicted ${r.predicted.toFixed(1).padStart(5)}%  diff ${(d >= 0 ? '+' : '') + d.toFixed(1)}`.padEnd(70) + `confidence ${r.conf}${r.after !== r.conf ? ' → ' + r.after + ' after shape check' : ''}`);
 }
 console.log(`volume fraction, Mesh build vs Synth prediction: worst |diff| ${worst.toFixed(1)} points over ${rows.length} designs`);

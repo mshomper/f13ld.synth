@@ -13,6 +13,15 @@ const CONF_TEXT = {
   low:    'The trees disagree strongly: this design is far from the training data. Check it in F13LD.lab.'
 };
 
+// Confidence note, with the shape check's finding when it moved the label.
+function confText(r){
+  const sh = r.shape;
+  if(!sh || !sh.level) return CONF_TEXT[r.confidence];
+  return `Measured from the shape, this design is ${sh.measured.toFixed(1)}% solid; the model expected ${sh.predicted.toFixed(1)}%. ` +
+    'The model is wrong about this design, so its other numbers are suspect too. Check it in F13LD.lab.';
+}
+const measuredMark = (key, r) => key === 'volume_fraction' && r.shape ? ' <small title="measured from the shape, not predicted">measured</small>' : '';
+
 function ensureViewer(){
   if(VIEWER) return VIEWER;
   const host = document.getElementById('viewHost');
@@ -52,7 +61,7 @@ function bulletRow(key, r, req){
   const lo = m.min, hi = m.max, s = v => 4 + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * 292;
   const z = (pred - target) / sig, c = dotColorForZ(z), d = displayMetric(key, pred);
   return `<div class="nm">${METRIC_DEFS[key][resolveValue(1, m.norm_kind).isResolved ? 'labelAbs' : 'label']}</div>
-    <div class="val" style="color:${c}">${d.v}<small>${d.unit}</small> <small>${z >= 0 ? '+' : ''}${z.toFixed(1)}σ</small></div>
+    <div class="val" style="color:${c}">${d.v}<small>${d.unit}</small>${measuredMark(key, r)} <small>${z >= 0 ? '+' : ''}${z.toFixed(1)}σ</small></div>
     <svg viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true"><rect x="4" y="7" width="292" height="2" rx="1" fill="rgba(255,255,255,.1)"/>
      <rect x="${s(pred - sig)}" y="4" width="${Math.max(2, s(pred + sig) - s(pred - sig))}" height="8" rx="2" fill="${c}" opacity=".22"/>
      <path d="M${s(target)} 1V15" stroke="#FFB670" stroke-width="2"/><circle cx="${s(pred)}" cy="8" r="4" fill="${c}"/></svg>`;
@@ -76,10 +85,11 @@ function renderInspector(){
   document.getElementById('iRank').textContent = '#' + (i + 1);
   const cc = CONF_COLOR[r.confidence];
   document.getElementById('iTags').innerHTML = `<span class="tag">${presetDisplayLabel(r.presetKey)}</span><span class="tag">${r.design.mode}</span>` +
-    `<span class="tag" style="color:${cc};border-color:${cc}66" title="${CONF_TEXT[r.confidence]}"><span class="dot" style="background:${cc}"></span>${r.confidence} confidence</span>`;
+    `<span class="tag" style="color:${cc};border-color:${cc}66" title="${confText(r)}"><span class="dot" style="background:${cc}"></span>${r.confidence} confidence</span>` +
+    (r.shape && r.shape.level ? `<span class="tag" style="color:var(--warn);border-color:var(--warn)" title="${confText(r)}">shape differs from model</span>` : '');
   document.getElementById('iScore').textContent = Math.round(r.score * 100) + '%';
   const v = document.getElementById('iValid'); v.textContent = Math.round(r.validity * 100) + '%'; v.style.color = r.validity < 0.85 ? 'var(--warn)' : '';
-  const ic = document.getElementById('iConf'); ic.textContent = r.confidence; ic.style.color = cc; ic.title = CONF_TEXT[r.confidence];
+  const ic = document.getElementById('iConf'); ic.textContent = r.confidence; ic.style.color = cc; ic.title = confText(r);
 
   const req = SYNTH.lastReq || { targets: {}, weights: {} };
   const shown = Predictor.shownMetrics();
@@ -90,7 +100,7 @@ function renderInspector(){
   document.getElementById('iOth').innerHTML = shown.filter(k => !targeted.includes(k)).map(k => {
     const m = METRIC_DEFS[k], d = displayMetric(k, r.metrics[k]);
     const label = resolveValue(1, m.norm_kind).isResolved ? m.labelAbs : m.label;
-    return `<span class="nm ${R2[k] != null && R2[k] < 0.5 ? 'rough' : ''}">${label}</span>${fitBar(R2[k])}<span class="v">${d.v}<small>${d.unit}</small></span>`;
+    return `<span class="nm ${R2[k] != null && R2[k] < 0.5 ? 'rough' : ''}">${label}</span>${fitBar(R2[k])}<span class="v">${d.v}<small>${d.unit}</small>${measuredMark(k, r)}</span>`;
   }).join('');
   renderHeaderPills();
 }

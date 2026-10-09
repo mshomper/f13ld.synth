@@ -58,6 +58,7 @@ The numbers from a v0.3.0 retrain are **not directly comparable** to the previou
 - **Term cap raised from 6 to 10.** F-RD (6 terms + a constant) and lidinoid (9 terms) were being silently cut short. The trainer now warns if any row still overflows.
 - **Terms without a per-term phase no longer drop the row.** Current Sweep writes no per-term phase for PI-TPMS terms; the old encoder threw on those and silently skipped the whole row. Today's Vault rows may all carry the field, but a reseed from the new Sweep would have lost every PI-TPMS row.
 - **Shear moduli are trained when present.** `gxy_norm`, `gxz_norm`, `gyz_norm` are added automatically once 200+ rows carry them (Sweep v0.24+ data). Today's Vault data likely has none, and the trainer says so.
+- **Rows with no solid thermal conductivity are kept** (trainer v0.3.1). They used to be dropped whole (414 rows, 15% of the 2026-10-09 Vault); now they train every metric except thermal, and the validity classifier. The trainer prints `N usable rows have no k_solid — kept; thermal (keff_avg_norm) is masked for them`, and the thermal line shows them as dropped NaN rows.
 - **Seeds carry their preset**, so Synth's preset filter uses the real preset of each sweep rather than guessing from the term pattern.
 
 ---
@@ -82,7 +83,8 @@ Designs loaded: 2109 (1852 usable for metric regression)
 ```
 Mean R²: model=0.XXX, KNN baseline=0.XXX
 ```
-- The bundle in production (trained 2026-05-19) is **mean R² 0.637**, KNN baseline 0.564, validity accuracy 0.879. (The 0.775 this guide used to quote was never the deployed bundle.)
+- Stopgap retrain with trainer v0.3.0 (2026-10-09, 2,316 rows): **mean R² 0.659**, KNN 0.517, validity 0.890. Per metric: volume_fraction 0.92 · ex 0.77 · ey 0.67 · ez 0.81 · anisotropy 0.05 · median pore 0.54 · pore CV 0.60 · thermal 0.90 · surface complexity 0.87 · directionality 0.46
+- The bundle it replaces (trained 2026-05-19) is **mean R² 0.637**, KNN baseline 0.564, validity accuracy 0.879. (The 0.775 this guide used to quote was never the deployed bundle.)
 - Per-metric, production is: volume_fraction 0.91 · ex 0.76 · ey 0.67 · ez 0.60 · anisotropy −0.03 · median pore 0.50 · pore CV 0.72 · thermal 0.88 · surface complexity 0.86 · directionality 0.49
 - A drop of more than 0.05 = investigate before deploying. A *small* shift either way is expected from the encoder fixes above
 - KNN baseline should be lower than model — if not, the model isn't learning anything useful
@@ -95,7 +97,7 @@ Mean R²: model=0.XXX, KNN baseline=0.XXX
 
 **4. Bundle file:**
 The trainer ends with `Seeds: 600 across N presets` and `Exported: tpms.json (NN MB)`. The production bundle is about 29 MB; a v0.3.0 bundle will be a little larger (more feature slots and seeds). Open it in a text editor and check the first line for:
-- `"version": "0.2.0"` and `"trainer_version": "0.3.0"`
+- `"version": "0.2.0"` and `"trainer_version": "0.3.1"`
 - `"data_source": "vault"`
 - `"n_valid"` matching the count printed earlier
 - `"feature_dim": 384` with the default 10-term cap (it was 236 with the old 6-term cap)

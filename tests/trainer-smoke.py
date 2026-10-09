@@ -6,7 +6,8 @@ runs the real train_synth.py vault path end to end.
 
 The fake rows deliberately include what used to break the trainer: terms
 switched off, PI-TPMS terms with no per-term phase, a 9-term lidinoid, rows
-with shear moduli, and a few corrupted stiffness values."""
+with shear moduli, rows with no solid conductivity, and a few corrupted
+stiffness values."""
 import copy, json, math, random, sys, types, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 recipes = json.load(open(sys.argv[1]))
@@ -34,8 +35,9 @@ def fake_rows():
                  "pore_size_cv": rnd.uniform(.4, .9), "keff_x": vf / 100 * 7, "keff_y": vf / 100 * 7, "keff_z": vf / 100 * 7,
                  "surface_complexity": rnd.uniform(1, 1.5)}
         if i % 97 == 3: homog["Ex_GPa"] *= 400                       # corrupted row
+        no_k = i % 7 == 2                                             # no solid conductivity: thermal masked, row kept
         row = {"family": "tpms", "recipe": dict(r, homogenization=homog), "e_solid_gpa": 110, "sigma_ref_gpa": 0.9,
-               "cell_size_mm": 2, "material": {"k_W_mK": 7.0},
+               "cell_size_mm": 2, "material": None if no_k else {"k_W_mK": 7.0},
                "solver_validity": "invalid" if i % 11 == 0 else ("partial" if i % 5 == 0 else "valid"),
                "pore_size_p50_norm": rnd.uniform(.05, .4), "directionality": rnd.choice([1/3, 2/3, 1.0])}
         if i % 2 == 0:

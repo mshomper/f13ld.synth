@@ -167,6 +167,10 @@ const SynthSearch = (function(){
       stats.buckets[bucket]++;
       if(bucket !== req.connectivity){ stats.connectivity++; return null; }
     }
+    const m = match(ctx, req, pred, spread);
+    return finish(d, validity, pred, spread, m.zPerMetric, m.zRms, m.score, m.spreadRatio);
+  }
+  function match(ctx, req, pred, spread){
     let z2 = 0, tw = 0, sr = 0, sw = 0;
     const zPerMetric = {};
     for(const m of ctx.outputMetrics){
@@ -179,9 +183,32 @@ const SynthSearch = (function(){
       if(spread[m] != null && ctx.spreadRef[m]){ sr += (spread[m] / ctx.spreadRef[m]) * w; sw += w; }
     }
     const zRms = tw > 0 ? Math.sqrt(z2 / tw) : 0;
-    const score = Math.exp(-(zRms * zRms) / 6);
-    const spreadRatio = sw > 0 ? sr / sw : 1;
-    return finish(d, validity, pred, spread, zPerMetric, zRms, score, spreadRatio);
+    return { zPerMetric, zRms, score: Math.exp(-(zRms * zRms) / 6), spreadRatio: sw > 0 ? sr / sw : 1 };
+  }
+
+  // Shape check (Matt, 2026-10-09). The solid fraction measured from the
+  // shape itself is exact; the model's is a guess. A gap past 2σ means the
+  // forest is wrong about this design, so its other predictions are suspect
+  // too: confidence drops one level (to low past 3σ) and the rank takes the
+  // same cut a low-confidence design gets. The measured value replaces the
+  // prediction, so a volume-fraction target is scored on the real shape.
+  const SHAPE_CHECK = { warnZ: 2, badZ: 3, cut: [1, 0.8, 0.56] };
+  const CONF_LEVELS = ['high', 'medium', 'low'];
+  function shapeCheck(ctx, req, c, measuredVF){
+    const predicted = c.pred.volume_fraction, sig = ctx.sigmas.volume_fraction;
+    if(measuredVF == null || !isFinite(measuredVF) || predicted == null || !sig) return c;
+    const gapZ = (measuredVF - predicted) / sig, a = Math.abs(gapZ);
+    const level = a > SHAPE_CHECK.badZ ? 2 : a > SHAPE_CHECK.warnZ ? 1 : 0;
+    const pred = Object.assign({}, c.pred, { volume_fraction: measuredVF });
+    const m = match(ctx, req, pred, c.spread);
+    const out = finish(c.design, c.validity, pred, c.spread, m.zPerMetric, m.zRms, m.score, c.spreadRatio);
+    const base = CONF_LEVELS.indexOf(confidenceLabel(c.spreadRatio));
+    const now = level === 0 ? base : level === 1 ? Math.min(2, base + 1) : 2;
+    out.rank *= now === base ? 1 : now === 2 ? SHAPE_CHECK.cut[2] : SHAPE_CHECK.cut[1];
+    out.confidence = CONF_LEVELS[now];
+    out.shape = { measured: measuredVF, predicted, gapZ, level };
+    out.seedIndex = c.seedIndex; out.presetKey = c.presetKey;
+    return out;
   }
 
   // Rank = match × √validity × confidence factor. Wider searches drift toward
@@ -318,8 +345,11 @@ const SynthSearch = (function(){
       for(let i = 0; i < ROUND.parents - best.length && cellsArr.length; i++) spread.push(cellsArr[Math.floor(rand() * cellsArr.length)]);
       parents = best.concat(spread).map(c => ({ design: c.design, seedIndex: c.seedIndex }));
     }
-    const final = pickFinal(elites.concat([...archive.values()]), 8, 2);
-    return { final, stats, rounds: round, scanned: stats ? stats.scanned : 0, reason, seconds: (now() - t0) / 1000 };
+    const all = elites.concat([...archive.values()]);
+    const final = pickFinal(all, 8, 2);
+    // A longer list for the shape check, so a design it rules out has a replacement.
+    const shortlist = pickFinal(all, 16, 2);
+    return { final, shortlist, stats, rounds: round, scanned: stats ? stats.scanned : 0, reason, seconds: (now() - t0) / 1000 };
   }
 
   // Context from the init message. init.model is SynthForest.toMessage()
@@ -371,7 +401,7 @@ const SynthSearch = (function(){
   function confidenceLabel(ratio){ return ratio <= 1.25 ? 'high' : ratio <= 2 ? 'medium' : 'low'; }
 
   return { rng, buildSeedTable, mutate, scoreCandidate, topK, run, coordinate, makeContext,
-           sigmasFromBundle, pickFinal, mergeStats, confidenceLabel, confidenceFactor,
+           sigmasFromBundle, pickFinal, mergeStats, confidenceLabel, confidenceFactor, shapeCheck, SHAPE_CHECK,
            EXPLORE_STRENGTH, REFINE_STRENGTH, VALIDITY_FLOOR, ROUND };
 })();
 

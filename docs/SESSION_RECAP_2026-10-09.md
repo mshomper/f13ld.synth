@@ -1,4 +1,4 @@
-# Session recap — 2026-10-09 · v0.4.0 (preview, UI rebuild, wider search)
+# Session recap — 2026-10-09 · v0.4.0–0.4.1 (preview, UI rebuild, wider search, shape check)
 
 ## Decisions from Matt
 - Result map layout (B): map larger, thumbnails smaller
@@ -21,8 +21,12 @@
 ## Checks run
 roundtrip · forest parity · load order (22 scripts) · search smoke · Mesh parity · preview parity (0.0 points) · headless page check (Wide search, preset filter, Stop, sort, recipe re-encode, phone overflow) · single-file preview.
 
-## Open finding
-Mesh parity has one mutated solid design that builds at 4.5% solid where the model predicts 20.6%. The recipe is right (the preview agrees with Mesh); the model is wrong far from its training data. Proposal: measure the solid fraction from geometry for the final eight and lower confidence when it disagrees. Not built yet.
+## Shape check (v0.4.1, approved by Matt)
+Mesh parity found a mutated solid design that builds at 4.5% solid where the model predicts 20.6%: the recipe is right, the model is wrong far from its data. Synth now measures the best 16 designs' solid fraction on the GPU (same field as the preview and Mesh), scores volume fraction on the measured value, drops confidence a level past 2σ (to low past 3σ) and re-picks the final eight. That design now reads low. Took 3 s for 16 designs on the VM's software renderer; a real GPU should be well under a second.
+
+## Retraining (stopgap, on Matt's machine)
+- Trainer v0.3.0 on the full Vault: 2,316 designs, mean R² 0.659 (production 0.637), validity 0.890, six presets. Only pore size CV dropped (0.72 → 0.60). Bundle 31.8 MB, over GitHub's 25 MB browser upload, so Matt sends it zipped for Claude to check and commit.
+- Trainer v0.3.1: the 414 rows with no solid conductivity are kept for everything but thermal (Matt approved). Rerun to pick them up.
 
 ---
 
