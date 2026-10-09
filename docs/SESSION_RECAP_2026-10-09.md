@@ -1,3 +1,34 @@
+# Session recap — 2026-10-09 · v0.5.0 (pads follow what varies) — end of session
+
+Synth went from v0.2 to v0.5.0 in one day: modules, exact scoring, 3-D preview, UI rebuild, search in rounds, shape check, a stopgap retrain, and new pads. All on `main`; live at mshomper.github.io/f13ld.synth.
+
+## Decisions from Matt (v0.5.0)
+- Results in the target ring were X-only stiff and low confidence; the map should show overall match → brightness by match on every target, low confidence faint
+- Pads re-paired around what varies on its own in the data:
+  1. Stiffness × Pore size (kept)
+  2. **Main axis × Off-axis** — axis-agnostic ("a measure of different axis" rather than Z)
+  3. **Porosity × Pore spread** — porosity, not volume fraction
+- Near-copy filter, and an out-of-reach note when no result gets close on every target
+- Push to main when done
+
+## What changed
+- **Why the pads changed.** Across the 600 training designs, volume fraction, stiffness and thermal move together (rank correlation 0.96–0.97); pore size moves against them (about −0.8); pore size CV is independent (0.13–0.22); anisotropy is the model's weakest output (fit 0.11). The old Volume × Thermal pad was two-thirds unreachable.
+- **Main axis × Off-axis.** X = stiffness along the stiffest axis, whichever it is; Y = the other two axes' mean as a percent of it. When on, it replaces pad 1's stiffness targets (pad 1 sets pore size only, with a note). The off-axis share's sigma is worked out for each target (a ratio of soft axes is loose). The inspector names the main axis.
+- **Porosity × Pore spread.** Porosity = 100 − volume fraction (measured after the shape check). Ranges cover where the training designs sit (porosity 50–99%, CV 0.5–1.4; the old CV range 0.4–0.9 missed most designs). Note when on with pad 1.
+- **Pad 1 range** stops at 0.3 Es: no confident design reaches even stiffness past about 0.2 Es. Default moved to a reachable spot (the old centre default was out of reach).
+- Derived metrics (`stiff_main`, `stiff_ratio`, `porosity`) computed from the forest's outputs in `12-search-core.js`; no retrain needed.
+- **Map brightness** = match on every target (score³), low confidence at a third; legend says so.
+- **Near-copy filter.** A second result from one seed must differ in shape (same term structure with every setting within 20% of its range counts as a copy; cell scale ignored — it only sets repeats per cell, and the thumbnails show one repeat) or by 0.5σ in some prediction.
+- **Out of reach.** No result within 1.5σ on every target → amber status "target out of reach, closest shown", with a tooltip.
+
+## Checks run
+load order (22 scripts) · round trip 600/600 · search smoke · Mesh parity · preview parity (0.2 points) · page check (default search reaches its target at 83% with high confidence; main-axis pad replaces pad 1 stiffness; pad notes; porosity search; phone overflow none) · single-file preview.
+
+## Next up
+See `docs/NEXT-UP.md`.
+
+---
+
 # Session recap — 2026-10-09 · v0.4.0–0.4.1 (preview, UI rebuild, wider search, shape check)
 
 ## Decisions from Matt
@@ -62,7 +93,7 @@ Mesh parity found a mutated solid design that builds at 4.5% solid where the mod
 ## Checks run
 roundtrip (200/200 seeds exact) · forest parity (≤1e-14) · load order · search smoke (8/8 recipes re-encode to the scored features) · Mesh parity (volume fraction within 5 points) · headless page check (search, preset filter, recipe) · trainer against a fake Vault · page against a new-format bundle · single-file preview from a file URL.
 
-## Next
+## Next (as of v0.3.0 — superseded by docs/NEXT-UP.md)
 - Matt: click-test the branch (preview file or a local server), then merge; copy the new `train_synth.py` to the training folder and run the stopgap retrain.
 - Phase 2: raymarcher.
 - When the reseeded Vault exists: retrain with `--solver-version`, consider a tighter `--max-norm`; Sweep's per-axis `cell_scale_x/y/z` and field-pair PI-TPMS (`surface_b`) are not in the encoder yet — adding them changes the bundle layout (Synth reads it from the bundle, so no lockstep page edit).

@@ -14,6 +14,8 @@ Most CAD pipelines run forward — pick parameters, simulate, see what you got. 
 
 The predictor is a per-family Random Forest model trained offline from F13LD.vault. As the community ingests more sweep data into Vault, the model gets retrained against a richer dataset. The model chip in the header shows this lineage — what the model was trained on, its fit, and how many designs Vault has gained since.
 
+Session notes: `docs/SESSION_RECAP_2026-10-09.md`. What's next: `docs/NEXT-UP.md`.
+
 ## The three pads
 
 Synth deliberately doesn't expose nine independent metric sliders. In the training data only three things vary on their own: overall stiffness/density (volume fraction, stiffness and thermal move together at 0.96–0.97 rank correlation, pore size against them at about −0.8), direction (stiffness along one axis against the others) and pore uniformity (pore size CV, nearly independent of everything). The three pads follow those (v0.5.0):
