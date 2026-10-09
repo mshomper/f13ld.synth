@@ -93,7 +93,7 @@ const Predictor = {
     const checked = list.map((c, i) => SynthSearch.shapeCheck(this.ctx, req, c, vf[i]));
     const off = checked.filter(c => c.shape && c.shape.level > 0).length;
     console.info(`[F13LD.synth] Shape check: ${checked.length} designs measured in ${((performance.now() - t0) / 1000).toFixed(1)}s · ${off} differ from the model by more than ${SynthSearch.SHAPE_CHECK.warnZ}σ in solid fraction`);
-    return SynthSearch.pickFinal(checked, 8, 2);
+    return SynthSearch.pickFinal(checked, 8, 2, this.ctx.sigmas, this.ctx.ranges);
   },
 
   async runJobs(jobs){

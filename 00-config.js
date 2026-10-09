@@ -5,7 +5,7 @@
    ============================================================ */
 'use strict';
 
-const F13LD_SYNTH_VERSION = '0.4.1';
+const F13LD_SYNTH_VERSION = '0.5.0';
 
 // Model bundles. The relative path is what GitHub Pages serves; the absolute
 // one lets the single-file preview build (opened outside the site) load the
@@ -38,4 +38,5 @@ const SEARCH_DEPTHS = {
 const DEFAULT_DEPTH = 'wide';
 const SEARCH_PER_WORKER = 600;       // designs per worker per round
 const SEARCH_PER_WORKER_MAIN = 300;  // main-thread fallback (keeps the page responsive)
+const REACH_Z = 1.5;                 // a result within this many σ on every target counts as reaching it
 const DEPTH_STORAGE_KEY = 'f13ld.synth.depth.v1';

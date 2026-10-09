@@ -4,6 +4,8 @@
    lands as a faint point as its round comes back; the eight best are
    numbered rings that glide to where the latest round put them; the
    dashed ring is 1σ (the model's residual) around the pad's target.
+   A point's brightness is its match on every target, including the ones
+   the two axes cannot show; low-confidence points are drawn faint.
    Tabs switch the axes between the three pads. Click a ring to select.
 
    Points are drawn once into an offscreen layer as they arrive, so a
@@ -11,9 +13,11 @@
    ============================================================ */
 'use strict';
 
-// The metrics every scored design reports for the map (12-search-core ptsKeys).
-const MAP_KEYS = ['ex_norm', 'pore_size_p50_norm', 'anisotropy', 'pore_size_cv', 'volume_fraction', 'keff_avg_norm'];
-const MAP_TAB_LABELS = { mech_pore: 'Stiffness × Pore', aniso_dist: 'Aniso × Pore CV', mass_thermal: 'Volume × Thermal' };
+// The metrics every scored design reports for the map (12-search-core ptsKeys),
+// plus its overall match and tree-spread ratio.
+const MAP_KEYS = ['ex_norm', 'pore_size_p50_norm', 'stiff_main', 'stiff_ratio', 'porosity', 'pore_size_cv'];
+const MAP_PTS_KEYS = MAP_KEYS.concat(['_match', '_conf']);
+const MAP_TAB_LABELS = { mech_pore: 'Stiffness × Pore', direction: 'Main × Off-axis', porosity_pores: 'Porosity × Pore spread' };
 
 const MAP = {
   tab: 0, pts: new Float32Array(0), n: 0, layer: null, dirtyFrom: 0,
@@ -27,14 +31,14 @@ function mapReset(){
 }
 function mapAddPoints(chunk){
   if(!chunk || !chunk.length) return;
-  const need = MAP.n * MAP_KEYS.length + chunk.length;
+  const nk = MAP_PTS_KEYS.length, need = MAP.n * nk + chunk.length;
   if(need > MAP.pts.length){
-    const np = new Float32Array(Math.max(need, MAP.pts.length * 2, 6 * 4096));
-    np.set(MAP.pts.subarray(0, MAP.n * MAP_KEYS.length)); MAP.pts = np;
+    const np = new Float32Array(Math.max(need, MAP.pts.length * 2, nk * 4096));
+    np.set(MAP.pts.subarray(0, MAP.n * nk)); MAP.pts = np;
   }
-  MAP.pts.set(chunk, MAP.n * MAP_KEYS.length);
+  MAP.pts.set(chunk, MAP.n * nk);
   if(MAP.dirtyFrom == null) MAP.dirtyFrom = MAP.n;
-  MAP.n += chunk.length / MAP_KEYS.length;
+  MAP.n += chunk.length / nk;
 }
 // Ring targets: one per result, in best-match order. Rings glide there.
 function mapSetGoals(preds, instant){
@@ -64,7 +68,7 @@ function mapStep(){
 function mapAxes(){
   const def = PAD_DEFS[MAP.tab];
   const kx = def.xMetric, ky = def.yMetric;
-  return { def, kx, ky, xi: MAP_KEYS.indexOf(kx), yi: MAP_KEYS.indexOf(ky), xr: MAP_RANGES[kx], yr: MAP_RANGES[ky] };
+  return { def, kx, ky, xi: MAP_PTS_KEYS.indexOf(kx), yi: MAP_PTS_KEYS.indexOf(ky), xr: MAP_RANGES[kx], yr: MAP_RANGES[ky] };
 }
 function mapGeom(cv){
   const w = cv.clientWidth, h = cv.clientHeight, pl = 52, pr = 18, pt = 38, pb = 44;
@@ -93,13 +97,24 @@ function mapRender(){
     MAP.layer.width = W; MAP.layer.height = H; MAP.layerTab = MAP.tab; MAP.dirtyFrom = 0;
   }
   if(MAP.dirtyFrom != null){
-    const L = MAP.layer.getContext('2d'), nk = MAP_KEYS.length;
+    // Brightness = match on every target (score³ so 1σ reads bright and 2σ
+    // faint), cut to a third for low confidence. Points are bucketed so each
+    // bucket is one fillStyle.
+    const L = MAP.layer.getContext('2d'), nk = MAP_PTS_KEYS.length, mi = MAP_PTS_KEYS.indexOf('_match'), ci = MAP_PTS_KEYS.indexOf('_conf');
     L.setTransform(dpr, 0, 0, dpr, 0, 0);
     if(MAP.dirtyFrom === 0) L.clearRect(0, 0, G.w, G.h);
     L.globalCompositeOperation = 'lighter';
-    L.fillStyle = `rgba(79,184,201,${(0.09 * Math.min(1, (pw * ph) / (620 * 420))).toFixed(4)})`;
-    for(let i = MAP.dirtyFrom; i < MAP.n; i++)
-      L.fillRect(G.sx(MAP.pts[i * nk + G.A.xi]) - 1, G.sy(MAP.pts[i * nk + G.A.yi]) - 1, 2.2, 2.2);
+    const base = 0.34 * Math.min(1, (pw * ph) / (620 * 420)), NB = 8, buckets = Array.from({ length: NB }, () => []);
+    for(let i = MAP.dirtyFrom; i < MAP.n; i++){
+      const sc = MAP.pts[i * nk + mi], ratio = MAP.pts[i * nk + ci];
+      const b = 0.1 + 0.9 * sc * sc * sc * (ratio > 2 ? 0.33 : 1);
+      buckets[Math.min(NB - 1, Math.floor(b * NB))].push(i);
+    }
+    buckets.forEach((list, k) => {
+      if(!list.length) return;
+      L.fillStyle = `rgba(79,184,201,${(base * (k + 0.5) / NB).toFixed(4)})`;
+      for(const i of list) L.fillRect(G.sx(MAP.pts[i * nk + G.A.xi]) - 1, G.sy(MAP.pts[i * nk + G.A.yi]) - 1, 2.2, 2.2);
+    });
     MAP.dirtyFrom = null;
   }
   x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(MAP.layer, 0, 0); x.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -108,7 +123,7 @@ function mapRender(){
   const def = G.A.def;
   if(padState[def.id] && padState[def.id].mode !== 'off'){
     const tvx = padPosToMetricValue(def, 'x'), tvy = padPosToMetricValue(def, 'y');
-    const sg = Predictor.sigmas || {};
+    const sg = Object.assign({}, Predictor.sigmas || {}, buildTargetsFromPads().sigmas);
     const tx = G.sx(tvx), ty = G.sy(tvy);
     const rx = sg[G.A.kx] ? Math.abs(G.sx(tvx + sg[G.A.kx]) - tx) : 0, ry = sg[G.A.ky] ? Math.abs(G.sy(tvy + sg[G.A.ky]) - ty) : 0;
     const col = padState[def.id].mode === 'require' ? '255,182,112' : '200,245,66';
@@ -140,7 +155,7 @@ function mapRender(){
 
   const lg = document.getElementById('mapLegend');
   if(lg) lg.innerHTML = MAP.n
-    ? `<b>${MAP.n.toLocaleString()}</b> designs passed the filters${MAP.round ? ' · round <b>' + MAP.round + '</b>' : ''}${MAP.legendExtra}<br>dashed ring: 1σ around your target`
+    ? `<b>${MAP.n.toLocaleString()}</b> designs passed the filters${MAP.round ? ' · round <b>' + MAP.round + '</b>' : ''}${MAP.legendExtra}<br>brighter = closer on every target · dashed ring: 1σ`
     : 'no search yet · Synthesize to fill the map';
 }
 function pb2(G){ return G.pb - 14; }

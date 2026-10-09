@@ -20,7 +20,12 @@ function confText(r){
   return `Measured from the shape, this design is ${sh.measured.toFixed(1)}% solid; the model expected ${sh.predicted.toFixed(1)}%. ` +
     'The model is wrong about this design, so its other numbers are suspect too. Check it in F13LD.lab.';
 }
-const measuredMark = (key, r) => key === 'volume_fraction' && r.shape ? ' <small title="measured from the shape, not predicted">measured</small>' : '';
+const measuredMark = (key, r) => (key === 'volume_fraction' || key === 'porosity') && r.shape ? ' <small title="measured from the shape, not predicted">measured</small>' : '';
+// Row label; main-axis stiffness also says which axis is the main one.
+function metricLabel(key, r){
+  const m = METRIC_DEFS[key], base = m[resolveValue(1, m.norm_kind).isResolved ? 'labelAbs' : 'label'];
+  return key === 'stiff_main' ? `${base} (${'XYZ'[SynthSearch.mainAxis(r.metrics)]})` : base;
+}
 
 function ensureViewer(){
   if(VIEWER) return VIEWER;
@@ -57,10 +62,10 @@ function renderViewLabel(){
 }
 
 function bulletRow(key, r, req){
-  const m = METRIC_DEFS[key], pred = r.metrics[key], target = req.targets[key], sig = Predictor.sigmas[key];
+  const m = METRIC_DEFS[key], pred = r.metrics[key], target = req.targets[key], sig = (req.sigmas && req.sigmas[key]) || Predictor.sigmas[key];
   const lo = m.min, hi = m.max, s = v => 4 + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * 292;
   const z = (pred - target) / sig, c = dotColorForZ(z), d = displayMetric(key, pred);
-  return `<div class="nm">${METRIC_DEFS[key][resolveValue(1, m.norm_kind).isResolved ? 'labelAbs' : 'label']}</div>
+  return `<div class="nm">${metricLabel(key, r)}</div>
     <div class="val" style="color:${c}">${d.v}<small>${d.unit}</small>${measuredMark(key, r)} <small>${z >= 0 ? '+' : ''}${z.toFixed(1)}σ</small></div>
     <svg viewBox="0 0 300 16" preserveAspectRatio="none" aria-hidden="true"><rect x="4" y="7" width="292" height="2" rx="1" fill="rgba(255,255,255,.1)"/>
      <rect x="${s(pred - sig)}" y="4" width="${Math.max(2, s(pred + sig) - s(pred - sig))}" height="8" rx="2" fill="${c}" opacity=".22"/>
@@ -93,7 +98,7 @@ function renderInspector(){
 
   const req = SYNTH.lastReq || { targets: {}, weights: {} };
   const shown = Predictor.shownMetrics();
-  const targeted = shown.filter(k => req.weights[k] > 0 && req.targets[k] != null);
+  const targeted = Object.keys(METRIC_DEFS).filter(k => req.weights[k] > 0 && req.targets[k] != null && r.metrics[k] != null);
   document.getElementById('iBul').innerHTML = targeted.map(k => bulletRow(k, r, req)).join('') ||
     '<div class="nm" style="grid-column:1/-1;color:var(--t3)">no pad was on</div>';
   const R2 = Predictor.metricsR2 || {};

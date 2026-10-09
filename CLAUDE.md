@@ -11,6 +11,7 @@
 - `10-encoding.js` mirrors `encode_design_unified()` in `train_synth.py` slot for slot. Change both together.
 - `24-f13-shade.js` holds the shared F13LD-SHADE / F13LD-VIEW blocks — keep them byte-identical with the other F13LD tools.
 - `02-materials.js` is generated from F13LD.lab: `node tools/sync-materials.js ../f13ld.lab`.
+- Derived metrics (`stiff_main`, `stiff_ratio`, `porosity`) are computed in `12-search-core.js addDerived` from the forest's outputs; they need METRIC_DEFS entries and MAP_RANGES but no trainer change.
 - Bump `F13LD_SYNTH_VERSION` in `00-config.js` and the header label in `index.html` (`.fh-version`) on every release.
 - Serve over http(s) to test; `file://` does not work for the multi-file build (workers). `node tools/build-single.js` makes a one-file preview that does.
 

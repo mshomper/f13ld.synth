@@ -50,13 +50,19 @@ function buildPresetDropdown(){
 }
 
 // ── Pad geometry ──
-function padPosToMetricValue(def, axis) {
+function padRange(def, axis) {
+  const r = axis === 'x' ? def.xRange : def.yRange;
+  if (r) return r;
   const m = METRIC_DEFS[axis === 'x' ? def.xMetric : def.yMetric];
-  return m.min + padState[def.id][axis] * (m.max - m.min);
+  return [m.min, m.max];
+}
+function padPosToMetricValue(def, axis) {
+  const [lo, hi] = padRange(def, axis);
+  return lo + padState[def.id][axis] * (hi - lo);
 }
 function metricValueToPadPos(def, axis, value) {
-  const m = METRIC_DEFS[axis === 'x' ? def.xMetric : def.yMetric];
-  return Math.max(0, Math.min(1, (value - m.min) / (m.max - m.min)));
+  const [lo, hi] = padRange(def, axis);
+  return Math.max(0, Math.min(1, (value - lo) / (hi - lo)));
 }
 function padTargetText(def, axis) {
   const key = axis === 'x' ? def.xMetric : def.yMetric;
@@ -100,7 +106,7 @@ function renderPads() {
         <div class="seg" data-padmode="${def.id}">
           <button type="button" data-m="off" class="${s.mode === 'off' ? 'on' : ''}">off</button><button type="button" data-m="prefer" class="${s.mode === 'prefer' ? 'on' : ''}">prefer</button><button type="button" data-m="require" class="req ${s.mode === 'require' ? 'on' : ''}">require</button>
         </div></div>
-      ${body}</div>`;
+      ${on && padNote(def) ? `<div class="pad-note">${padNote(def)}</div>` : ''}${body}</div>`;
   }).join('');
   const n = PAD_DEFS.filter(d => padState[d.id].mode !== 'off').length;
   document.getElementById('nActive').textContent = n + ' pad' + (n === 1 ? '' : 's') + ' on';
@@ -151,18 +157,32 @@ function unitText(m) { const r = resolveValue(1, m.norm_kind); return r.isResolv
 
 // ── Targets for the search ──
 // Each on pad sets its X and Y targets; the stiffness pad also sets Ey and Ez
-// (stiffness as a whole), slightly weaker.
+// (stiffness as a whole), slightly weaker. When the main-axis pad is on, its
+// stiffness targets replace pad 1's and pad 1 sets pore size only. The
+// off-axis share gets a sigma for this target (a ratio of soft axes is loose).
+function stiffnessOverridden() { return PAD_DEFS.some(d => d.overridesStiffness && padState[d.id].mode !== 'off'); }
 function buildTargetsFromPads() {
-  const targets = {}, weights = {};
+  const targets = {}, weights = {}, sigmas = {};
+  const override = stiffnessOverridden();
   for (const def of PAD_DEFS) {
     const s = padState[def.id];
     if (s.mode === 'off') continue;
     const w = MODE_WEIGHTS[s.mode];
-    targets[def.xMetric] = padPosToMetricValue(def, 'x'); weights[def.xMetric] = Math.max(weights[def.xMetric] || 0, w);
+    const skipX = override && def.coupledMetrics;
+    if (!skipX) { targets[def.xMetric] = padPosToMetricValue(def, 'x'); weights[def.xMetric] = Math.max(weights[def.xMetric] || 0, w); }
     targets[def.yMetric] = padPosToMetricValue(def, 'y'); weights[def.yMetric] = Math.max(weights[def.yMetric] || 0, w);
-    if (def.coupledMetrics) for (const c of def.coupledMetrics) { targets[c] = targets[def.xMetric]; weights[c] = Math.max(weights[c] || 0, w * 0.7); }
+    if (def.coupledMetrics && !skipX) for (const c of def.coupledMetrics) { targets[c] = targets[def.xMetric]; weights[c] = Math.max(weights[c] || 0, w * 0.7); }
   }
+  if (targets.stiff_ratio != null && targets.stiff_main != null && Predictor.sigmas)
+    sigmas.stiff_ratio = SynthSearch.ratioSigma(Predictor.sigmas.stiff_main, targets.stiff_main, targets.stiff_ratio);
   weights.surface_complexity = 0;
-  return { targets, weights };
+  return { targets, weights, sigmas };
+}
+// Notes under a pad when pads interact (shown in renderPads).
+function padNote(def) {
+  if (def.coupledMetrics && stiffnessOverridden()) return 'Stiffness comes from the main-axis pad; this pad sets pore size only.';
+  if (def.id === 'porosity_pores' && padState.mech_pore && padState.mech_pore.mode !== 'off')
+    return 'Stiffness and porosity move together in this data, so setting both can ask for a design that does not exist.';
+  return '';
 }
 function firstActivePad() { return PAD_DEFS.find(d => padState[d.id].mode !== 'off') || null; }

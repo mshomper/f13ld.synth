@@ -10,19 +10,21 @@
 
 F13LD.synth answers a question the rest of the F13LD suite can't: *"What design produces these properties?"*
 
-Most CAD pipelines run forward — pick parameters, simulate, see what you got. Synth runs the inverse direction. You set design intent on three X/Y pads, the predictor samples 2,000 candidate parameter sets within the trained design space, scores each against your intent, and returns the eight best with full recipes ready to open in F13LD.mesh.
+Most CAD pipelines run forward — pick parameters, simulate, see what you got. Synth runs the inverse direction. You set design intent on three X/Y pads, the search grows thousands of real designs from the training seeds over a few seconds, scores each against your intent, and returns the eight best with full recipes ready to open in F13LD.mesh or F13LD.lab.
 
 The predictor is a per-family Random Forest model trained offline from F13LD.vault. As the community ingests more sweep data into Vault, the model gets retrained against a richer dataset. The model chip in the header shows this lineage — what the model was trained on, its fit, and how many designs Vault has gained since.
 
 ## The three pads
 
-Synth deliberately doesn't expose nine independent metric sliders. Instead, three X/Y pads encode the design tradeoffs that actually matter:
+Synth deliberately doesn't expose nine independent metric sliders. In the training data only three things vary on their own: overall stiffness/density (volume fraction, stiffness and thermal move together at 0.96–0.97 rank correlation, pore size against them at about −0.8), direction (stiffness along one axis against the others) and pore uniformity (pore size CV, nearly independent of everything). The three pads follow those (v0.5.0):
 
-**Mechanics × Pore** — the fundamental scaffold tradeoff. X-axis is overall stiffness, Y-axis is mean pore size. More material → stiffer but tighter pores. Less material → permeable but compliant. Bone scaffold designers spend their careers in this pad.
+**Stiffness × Pore size** — the fundamental scaffold tradeoff. X sets stiffness in all three directions at once (Ex = Ey = Ez), Y the median pore size. Its stiffness range stops at 0.3 Es: even stiffness past about 0.2 Es is out of reach for every confident design in the current data.
 
-**Anisotropy × Pore Distribution** — the "what kind of material is it" pad. X-axis is anisotropy ratio (1 = isotropic, 3 = highly directional). Y-axis is pore size CV (0.4 = uniform, 0.9 = varied). Each corner is a different design philosophy: foam, directional truss, bone-like, exotic biomimicry.
+**Main axis × Off-axis** — direction. X is stiffness along the design's stiffest axis, whichever it is; Y is the other two axes' mean stiffness as a percent of it (100% = the same every way, low = one-axis). When this pad is on, its stiffness targets replace pad 1's and pad 1 sets pore size only. The off-axis share's tolerance is worked out for the target (a ratio of two soft axes is loose), so its dashed ring is tall at low stiffness.
 
-**Mass × Thermal** — the optional second-tier tradeoff. X-axis is volume fraction, Y-axis is thermal conductivity. Off by default; toggle on when heat handling matters (thermal exchangers, bone cement curing, etc.).
+**Porosity × Pore spread** — porosity (100 − volume fraction) and pore size CV, over the range the training designs cover. Because porosity and stiffness move together, turning this on with pad 1 shows a note: the two can ask for a design that does not exist.
+
+Anisotropy (fit 0.11) and thermal (follows volume fraction) are no longer pad axes; both are still predicted and shown. Main-axis stiffness, off-axis share and porosity are derived from the forest's predictions (`12-search-core.js addDerived`), not trained separately.
 
 Each pad has an `off / prefer / require` toggle. Off contributes nothing to the search. Prefer is a soft target. Require carries 2× the weight. Click any pad title to flip into precision mode. The **Preset** menu grows candidates only from training designs of one preset (listed from the loaded model with seed counts) — the SVG swaps for two number inputs with proper units, and any pinned values feed back into the search at high weight.
 
@@ -218,7 +220,9 @@ Material library presets (Ti-6Al-4V, 316L SS, 17-4PH SS, H13, Al 6061, AlSi10Mg,
 
 **Search over real designs.** Every candidate is a real design: a training seed decoded into its recipe and then varied the way F13LD.sweep varies a recipe (continuous nudges inside the range the training data covers, occasional sin/cos swaps and frequency changes). That exact design is encoded and scored, and the same design is what the preview shows and what Open in Mesh and Open in Lab send. (Before v0.3.0 Synth scored a blurred feature vector and snapped it to a recipe afterwards; the score of what it ranked and of what it sent differed by a median of 22 points.)
 
-**Rounds, by time (v0.4.0).** A search runs in rounds across a worker pool (all threads but one). Each round grows new designs from the best so far and from the best design in every filled cell of a 24 × 24 grid over the first active pad's axes, so it closes in on the target while keeping alternatives spread across the map. The mutation step starts wide and narrows each round. Depth sets the time limit — Quick (about 1 s), Wide (about 5 s, the default) and Deep (about 15 s) — and the search stops earlier once the best eight stop improving, or when you press Stop. At most two of the eight results come from the same seed.
+**Rounds, by time (v0.4.0).** A search runs in rounds across a worker pool (all threads but one). Each round grows new designs from the best so far and from the best design in every filled cell of a 24 × 24 grid over the first active pad's axes, so it closes in on the target while keeping alternatives spread across the map. The mutation step starts wide and narrows each round. Depth sets the time limit — Quick (about 1 s), Wide (about 5 s, the default) and Deep (about 15 s) — and the search stops earlier once the best eight stop improving, or when you press Stop. At most two of the eight results come from the same seed, and the second only if it is not a near-copy of the first: same term structure with every setting within 20% of its training range (cell scale left out — it only sets how many repeats fit in the cell, and the thumbnails show one repeat), or every prediction within 0.5σ.
+
+**Map brightness (v0.5.0).** Each point's brightness is its match on every target, including those the two axes cannot show (pad 1's map plots Ex, but Ey and Ez are scored too); low-confidence points are drawn at a third. When no result gets within 1.5σ on every target, the status bar says the target is out of reach and shows the closest.
 
 **The map is the loader.** Every design that passes the filters lands on the result map as its round comes back; the eight best are numbered rings that glide to where the latest round put them; the dashed ring is 1σ of the model's own error around your target.
 

@@ -36,6 +36,51 @@ const SynthSearch = (function(){
     return next;
   }
 
+  // ── Derived metrics (v0.5.0) ─────────────────────────────────────────────
+  // Computed from the forest's predictions, never trained on their own:
+  //   stiff_main   stiffness along the design's stiffest axis, whichever it is
+  //   stiff_ratio  the other two axes' mean stiffness as a percent of it
+  //                (100 = the same every way, low = one-axis)
+  //   porosity     100 − volume fraction (percent open)
+  // Spreads (for confidence) come from the axes they are built from.
+  const DERIVED_METRICS = ['stiff_main', 'stiff_ratio', 'porosity'];
+  const AXES = ['ex_norm', 'ey_norm', 'ez_norm'];
+  function mainAxis(pred){
+    let m = 0;
+    for(let i = 1; i < 3; i++) if(pred[AXES[i]] > pred[AXES[m]]) m = i;
+    return m;
+  }
+  function addDerived(pred, spread){
+    if(pred.ex_norm != null && pred.ey_norm != null && pred.ez_norm != null){
+      const m = mainAxis(pred), o1 = AXES[(m + 1) % 3], o2 = AXES[(m + 2) % 3];
+      const main = pred[AXES[m]];
+      pred.stiff_main = main;
+      pred.stiff_ratio = main > 1e-6 ? 100 * Math.max(0, (pred[o1] + pred[o2]) / 2) / main : 100;
+      if(spread){ spread.stiff_main = spread[AXES[m]]; spread.stiff_ratio = (spread[o1] + spread[o2]) / 2; }
+    }
+    if(pred.volume_fraction != null){
+      pred.porosity = 100 - pred.volume_fraction;
+      if(spread && spread.volume_fraction != null) spread.porosity = spread.volume_fraction;
+    }
+    return pred;
+  }
+  // Residual sigma for derived metrics. The ratio's depends on where the
+  // target is (a ratio of two soft axes is loose), so the pads also send a
+  // per-search value (req.sigmas, from ratioSigma); this is the fallback.
+  function derivedSigmas(sig){
+    if(sig.ex_norm && sig.ey_norm && sig.ez_norm){
+      sig.stiff_main = (sig.ex_norm + sig.ey_norm + sig.ez_norm) / 3;
+      sig.stiff_ratio = 25;
+    }
+    if(sig.volume_fraction) sig.porosity = sig.volume_fraction;
+    return sig;
+  }
+  // First-order error of off/main at a target (ratio in percent).
+  function ratioSigma(sigAxis, mainTarget, ratioTarget){
+    const r = ratioTarget / 100, m = Math.max(mainTarget, 1e-3);
+    return Math.max(3, Math.min(60, 100 * sigAxis * Math.sqrt(0.5 + r * r) / m));
+  }
+
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
   const r3 = v => SE.round(v, 3), r4 = v => SE.round(v, 4);
 
@@ -78,6 +123,7 @@ const SynthSearch = (function(){
     const all = {};
     for(const s of seeds){
       const r = SF.predictAll(model, enc.encode(s.design));
+      addDerived(r.pred, r.spread);
       for(const k in r.spread) (all[k] || (all[k] = [])).push(r.spread[k]);
     }
     for(const k in all){ const a = all[k].sort((p, q) => p - q); spreadRef[k] = Math.max(a[a.length >> 1], 1e-6); }
@@ -161,6 +207,7 @@ const SynthSearch = (function(){
     const validity = SF.predictValidity(model, x);
     if(validity < VALIDITY_FLOOR){ stats.validity++; return null; }
     const { pred, spread } = SF.predictAll(model, x);
+    addDerived(pred, spread);
     if(req.connectivity != null && pred.directionality != null){
       const v = pred.directionality;
       const bucket = v < 0.5 ? 1 : (v < 0.833 ? 2 : 3);
@@ -173,10 +220,10 @@ const SynthSearch = (function(){
   function match(ctx, req, pred, spread){
     let z2 = 0, tw = 0, sr = 0, sw = 0;
     const zPerMetric = {};
-    for(const m of ctx.outputMetrics){
+    for(const m of ctx.scoreMetrics){
       const w = req.weights[m] || 0;
       if(!w || req.targets[m] == null) continue;
-      const z = (pred[m] - req.targets[m]) / ctx.sigmas[m];
+      const z = (pred[m] - req.targets[m]) / ((req.sigmas && req.sigmas[m]) || ctx.sigmas[m]);
       zPerMetric[m] = z;
       const zc = Math.min(Math.abs(z), 3);
       z2 += zc * zc * w; tw += w;
@@ -199,7 +246,7 @@ const SynthSearch = (function(){
     if(measuredVF == null || !isFinite(measuredVF) || predicted == null || !sig) return c;
     const gapZ = (measuredVF - predicted) / sig, a = Math.abs(gapZ);
     const level = a > SHAPE_CHECK.badZ ? 2 : a > SHAPE_CHECK.warnZ ? 1 : 0;
-    const pred = Object.assign({}, c.pred, { volume_fraction: measuredVF });
+    const pred = addDerived(Object.assign({}, c.pred, { volume_fraction: measuredVF }), null);
     const m = match(ctx, req, pred, c.spread);
     const out = finish(c.design, c.validity, pred, c.spread, m.zPerMetric, m.zRms, m.score, c.spreadRatio);
     const base = CONF_LEVELS.indexOf(confidenceLabel(c.spreadRatio));
@@ -253,7 +300,10 @@ const SynthSearch = (function(){
   function run(ctx, req){
     const R = rng(req.rngSeed || 1);
     const stats = { scanned: 0, validity: 0, degenerate: 0, connectivity: 0, buckets: { 1: 0, 2: 0, 3: 0 } };
+    // '_match' and '_conf' report the design's overall match and tree-spread
+    // ratio, so the map can show how good each point is on every target.
     const keys = req.ptsKeys || [], nk = keys.length;
+    const src = keys.map(k => k === '_match' ? 1 : k === '_conf' ? 2 : 0);
     const pts = new Float32Array((req.count + req.parents.length) * nk);
     let np = 0;
     const out = [], cells = new Map(), g = req.grid;
@@ -261,7 +311,7 @@ const SynthSearch = (function(){
       if(!c) return;
       c.seedIndex = seedIndex; c.presetKey = ctx.seeds[seedIndex].presetKey;
       out.push(c);
-      for(let k = 0; k < nk; k++) pts[np * nk + k] = c.pred[keys[k]];
+      for(let k = 0; k < nk; k++) pts[np * nk + k] = src[k] === 1 ? c.score : src[k] === 2 ? c.spreadRatio : c.pred[keys[k]];
       np++;
       if(g){
         const gx = Math.floor((c.pred[g.kx] - g.x0) / (g.x1 - g.x0) * g.n);
@@ -325,7 +375,7 @@ const SynthSearch = (function(){
         stats = mergeStats(stats, r.stats);
       }
       elites = topK(elites.concat(fresh), ROUND.eliteKeep);
-      const final = pickFinal(elites.concat([...archive.values()]), 8, 2);
+      const final = pickFinal(elites.concat([...archive.values()]), 8, 2, ctx.sigmas, ctx.ranges);
       const mean = final.length ? final.reduce((a, c) => a + c.score, 0) / final.length : 0;
       history.push(mean);
       round++;
@@ -346,9 +396,9 @@ const SynthSearch = (function(){
       parents = best.concat(spread).map(c => ({ design: c.design, seedIndex: c.seedIndex }));
     }
     const all = elites.concat([...archive.values()]);
-    const final = pickFinal(all, 8, 2);
+    const final = pickFinal(all, 8, 2, ctx.sigmas, ctx.ranges);
     // A longer list for the shape check, so a design it rules out has a replacement.
-    const shortlist = pickFinal(all, 16, 2);
+    const shortlist = pickFinal(all, 16, 2, ctx.sigmas, ctx.ranges);
     return { final, shortlist, stats, rounds: round, scanned: stats ? stats.scanned : 0, reason, seconds: (now() - t0) / 1000 };
   }
 
@@ -358,7 +408,9 @@ const SynthSearch = (function(){
   function makeContext(init){
     const enc = SE.create(init.encoding, init.featureDim);
     const model = SF.fromMessage(init.model);
-    return { enc, model, outputMetrics: init.outputMetrics, sigmas: init.sigmas,
+    const sigmas = derivedSigmas(Object.assign({}, init.sigmas));
+    const scoreMetrics = init.outputMetrics.concat(DERIVED_METRICS.filter(k => sigmas[k]));
+    return { enc, model, outputMetrics: init.outputMetrics, scoreMetrics, sigmas,
              seeds: init.seeds, ranges: init.ranges, spreadRef: init.spreadRef };
   }
 
@@ -372,21 +424,56 @@ const SynthSearch = (function(){
       const span = Math.max((rg.max - rg.min) || 1, 1e-8);
       out[k] = Math.max((span / 4) * Math.sqrt(Math.max(1 - r2, 0.05)), 1e-6);
     }
-    return out;
+    return derivedSigmas(out);
   }
 
   // Final list: best first, at most `perSeed` results grown from one seed so
-  // eight cards are not eight near-copies of the same design.
-  function pickFinal(cands, n, perSeed){
-    const ranked = topK(cands, cands.length), per = {}, out = [], skipped = [];
+  // eight cards are not eight near-copies of the same design. With sigmas,
+  // a further result from the same seed is kept only if some prediction
+  // differs from that seed's earlier picks by NEAR_COPY_Z sigma or more.
+  // Two designs from one seed also count as near-copies when their one-cell
+  // shape barely differs: same term structure, and every continuous setting
+  // within NEAR_COPY_SHAPE (20%) of its training range. cell_scale is left out (it
+  // only sets how many repeats fit in the cell; the preview shows one).
+  const NEAR_COPY_Z = 0.5, NEAR_COPY_SHAPE = 0.2;
+  function shapeDistance(a, b, range){
+    if(a.mode !== b.mode || a.terms.length !== b.terms.length) return Infinity;
+    range = range || {};
+    const span = k => { const r = range[k]; return r ? Math.max(r[1] - r[0], 0.02) : 1; };
+    const ang = (p, q) => { const d = Math.abs(((p - q) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI); return d / Math.PI; };
+    let m = Math.max(Math.abs((a.wall_thickness || 0) - (b.wall_thickness || 0)) / span('wall_thickness'),
+                     Math.abs((a.offset || 0) - (b.offset || 0)) / span('offset'),
+                     Math.abs((a.pipe_radius || 0) - (b.pipe_radius || 0)) / span('pipe_radius'));
+    if(a.normal_weights && b.normal_weights) for(const k of ['wx', 'wy', 'wz'])
+      m = Math.max(m, Math.abs(a.normal_weights[k] - b.normal_weights[k]) / span('nw'));
+    if(a.phase_shift && b.phase_shift) for(const k of ['x', 'y', 'z'])
+      m = Math.max(m, Math.abs(a.phase_shift[k] - b.phase_shift[k]));
+    for(let i = 0; i < a.terms.length; i++){
+      const s = a.terms[i], t = b.terms[i];
+      if(s.factors.length !== t.factors.length) return Infinity;
+      for(let j = 0; j < s.factors.length; j++){
+        const f = s.factors[j], g = t.factors[j];
+        if(f.trig !== g.trig || f.fx !== g.fx || f.fy !== g.fy || f.fz !== g.fz) return Infinity;
+      }
+      m = Math.max(m, Math.abs(s.coef - t.coef) / 2);
+      if(s.phase_shift && t.phase_shift) for(const k of ['x', 'y', 'z']) m = Math.max(m, ang(s.phase_shift[k], t.phase_shift[k]));
+    }
+    return m;
+  }
+  function pickFinal(cands, n, perSeed, sigmas, ranges){
+    const ranked = topK(cands, cands.length), bySeed = {}, out = [], skipped = [], copies = [];
+    const metrics = sigmas ? Object.keys(sigmas).filter(k => DERIVED_METRICS.indexOf(k) < 0) : [];
+    const nearCopy = (a, b) => shapeDistance(a.design, b.design, ranges && ranges[a.design.mode]) < NEAR_COPY_SHAPE ||
+      metrics.every(k => a.pred[k] == null || b.pred[k] == null || Math.abs(a.pred[k] - b.pred[k]) < NEAR_COPY_Z * sigmas[k]);
     for(const c of ranked){
-      per[c.seedIndex] = (per[c.seedIndex] || 0) + 1;
-      if(per[c.seedIndex] > perSeed){ skipped.push(c); continue; }
-      out.push(c);
+      const mine = bySeed[c.seedIndex] || (bySeed[c.seedIndex] = []);
+      if(mine.length >= perSeed){ skipped.push(c); continue; }
+      if(sigmas && mine.some(o => nearCopy(o, c))){ copies.push(c); continue; }
+      mine.push(c); out.push(c);
       if(out.length >= n) break;
     }
     // Few distinct seeds (a narrow preset filter): top up with the best of the rest.
-    for(const c of skipped){ if(out.length >= n) break; out.push(c); }
+    for(const c of skipped.concat(copies)){ if(out.length >= n) break; out.push(c); }
     return out.sort((a, b) => b.rank - a.rank);
   }
 
@@ -402,6 +489,7 @@ const SynthSearch = (function(){
 
   return { rng, buildSeedTable, mutate, scoreCandidate, topK, run, coordinate, makeContext,
            sigmasFromBundle, pickFinal, mergeStats, confidenceLabel, confidenceFactor, shapeCheck, SHAPE_CHECK,
+           addDerived, mainAxis, ratioSigma, shapeDistance, DERIVED_METRICS,
            EXPLORE_STRENGTH, REFINE_STRENGTH, VALIDITY_FLOOR, ROUND };
 })();
 

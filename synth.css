@@ -91,6 +91,7 @@ select{font:inherit}
 .pad-svg{display:block;width:100%;height:auto;cursor:crosshair;touch-action:none}
 .pad-ro{display:flex;justify-content:space-between;gap:8px;padding:4px 10px 8px;font:10.5px var(--mono);color:var(--t3)}
 .pad-ro b{color:var(--t1);font-weight:500}
+.pad-note{margin:0 10px 6px;padding:5px 8px;border-left:2px solid var(--warn);background:rgba(255,182,112,.06);font:10.5px/1.45 var(--mono);color:var(--t2)}
 .pad-prec{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 10px 10px}
 .pad-prec label{display:flex;flex-direction:column;gap:3px;font:10px var(--mono);color:var(--t3)}
 .pad-prec input{height:28px;padding:0 8px;border:1px solid var(--hair2);border-radius:6px;background:var(--surface);color:var(--t1);font:12px var(--mono);text-align:right;min-width:0}

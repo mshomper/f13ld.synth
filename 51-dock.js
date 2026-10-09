@@ -94,20 +94,20 @@ async function runSearch(){
   const pad = firstActivePad();
   if(!pad){ statusSet('warn', 'Turn a pad to prefer or require first'); return; }
   toggleDrawer(false);
-  const { targets, weights } = buildTargetsFromPads();
+  const { targets, weights, sigmas } = buildTargetsFromPads();
   const req = {
-    targets, weights, connectivity: connectivityState, presetKey: presetState || null,
+    targets, weights, sigmas, connectivity: connectivityState, presetKey: presetState || null,
     grid: { kx: pad.xMetric, ky: pad.yMetric, x0: MAP_RANGES[pad.xMetric][0], x1: MAP_RANGES[pad.xMetric][1], y0: MAP_RANGES[pad.yMetric][0], y1: MAP_RANGES[pad.yMetric][1], n: 24 },
-    ptsKeys: MAP_KEYS
+    ptsKeys: MAP_PTS_KEYS
   };
   SYNTH.running = true; SYNTH.stopFlag = false; SYNTH.results = []; SYNTH.sel = -1; SYNTH.intentDirty = false; SYNTH.emptyText = '';
-  SYNTH.lastReq = { targets, weights };
+  SYNTH.lastReq = { targets, weights, sigmas };
   setRunButton(true); statusSpin(true);
   mapReset(); mapSetTab(PAD_DEFS.indexOf(pad));
   renderStrip(); renderInspector(); renderHeaderPills();
   const depth = SEARCH_DEPTHS[SYNTH.depth];
   document.getElementById('nScored').textContent = 'searching…';
-  statusSet('run', 'starting…', 0);
+  statusSet('run', 'starting…', 0); document.getElementById('st').title = '';
   let res;
   try {
     res = await Predictor.inverseSearch(req, {
@@ -135,8 +135,12 @@ async function runSearch(){
     const ended = { settled: 'settled', time: 'time limit', stopped: 'stopped' }[res.ended] || res.ended;
     const best = Math.max(...SYNTH.results.map(r => r.score));
     const off = SYNTH.results.filter(r => r.shape && r.shape.level).length;
-    statusSet('done', `<b>${res.stats.scanned.toLocaleString()} designs</b> · ${res.rounds} rounds · ${res.seconds.toFixed(1)} s · ${ended} · best ${Math.round(best * 100)}%` +
-      (off ? ` · ${off} shape${off > 1 ? 's' : ''} differ from the model` : ''), 1);
+    // Out of reach: no result within REACH_Z on every target it was given.
+    const reach = SYNTH.results.some(r => Object.values(r.zPerMetric).every(z => Math.abs(z) <= REACH_Z));
+    statusSet(reach ? 'done' : 'warn', `<b>${res.stats.scanned.toLocaleString()} designs</b> · ${res.rounds} rounds · ${res.seconds.toFixed(1)} s · ${ended} · best ${Math.round(best * 100)}%` +
+      (off ? ` · ${off} shape${off > 1 ? 's' : ''} differ from the model` : '') +
+      (reach ? '' : ' · <b>target out of reach</b>, closest shown'), 1);
+    document.getElementById('st').title = reach ? '' : `No design the model knows gets within ${REACH_Z}σ on every target you set. The eight shown are the closest; try moving a target toward where the map is bright.`;
     document.getElementById('nScored').textContent = `8 of ${res.stats.scanned.toLocaleString()} scored`;
   } else {
     const why = res.reason === 'error' ? 'search failed — see the console'
