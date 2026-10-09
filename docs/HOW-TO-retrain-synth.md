@@ -83,8 +83,9 @@ Designs loaded: 2109 (1852 usable for metric regression)
 ```
 Mean R²: model=0.XXX, KNN baseline=0.XXX
 ```
-- Stopgap retrain with trainer v0.3.0 (2026-10-09, 2,316 rows): **mean R² 0.659**, KNN 0.517, validity 0.890. Per metric: volume_fraction 0.92 · ex 0.77 · ey 0.67 · ez 0.81 · anisotropy 0.05 · median pore 0.54 · pore CV 0.60 · thermal 0.90 · surface complexity 0.87 · directionality 0.46
-- The bundle it replaces (trained 2026-05-19) is **mean R² 0.637**, KNN baseline 0.564, validity accuracy 0.879. (The 0.775 this guide used to quote was never the deployed bundle.)
+- **In production since 2026-10-09** (stopgap, trainer v0.3.1, 2,730 rows / 2,473 usable): **mean R² 0.660**, KNN baseline 0.510, validity accuracy 0.907. Per metric: volume_fraction 0.92 · ex 0.73 · ey 0.71 · ez 0.78 · anisotropy 0.11 · median pore 0.46 · pore CV 0.59 · thermal 0.91 · surface complexity 0.85 · directionality 0.55. 36.6 MB.
+- Compare residual σ as well as R²: when the test set changes (e.g. rows added for one preset), R² can move while the error Synth actually uses stays put. Median pore went 0.54 → 0.46 between the v0.3.0 and v0.3.1 runs with σ unchanged (0.109 → 0.111).
+- The bundle before that (trained 2026-05-19) was **mean R² 0.637**, KNN baseline 0.564, validity accuracy 0.879. (The 0.775 this guide used to quote was never the deployed bundle.)
 - Per-metric, production is: volume_fraction 0.91 · ex 0.76 · ey 0.67 · ez 0.60 · anisotropy −0.03 · median pore 0.50 · pore CV 0.72 · thermal 0.88 · surface complexity 0.86 · directionality 0.49
 - A drop of more than 0.05 = investigate before deploying. A *small* shift either way is expected from the encoder fixes above
 - KNN baseline should be lower than model — if not, the model isn't learning anything useful
@@ -96,7 +97,7 @@ Mean R²: model=0.XXX, KNN baseline=0.XXX
 - `anisotropy` near zero is structural (its label variance is tiny after the trim), not a model problem
 
 **4. Bundle file:**
-The trainer ends with `Seeds: 600 across N presets` and `Exported: tpms.json (NN MB)`. The production bundle is about 29 MB; a v0.3.0 bundle will be a little larger (more feature slots and seeds). Open it in a text editor and check the first line for:
+The trainer ends with `Seeds: 600 across N presets` and `Exported: tpms.json (NN MB)`. The production bundle is 36.6 MB — over GitHub's 25 MB browser-upload limit, so deploy it with GitHub Desktop, or zip it and hand it to Claude in a session to check and commit. Open it in a text editor and check the first line for:
 - `"version": "0.2.0"` and `"trainer_version": "0.3.1"`
 - `"data_source": "vault"`
 - `"n_valid"` matching the count printed earlier

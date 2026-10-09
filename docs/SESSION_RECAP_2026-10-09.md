@@ -26,7 +26,9 @@ Mesh parity found a mutated solid design that builds at 4.5% solid where the mod
 
 ## Retraining (stopgap, on Matt's machine)
 - Trainer v0.3.0 on the full Vault: 2,316 designs, mean R² 0.659 (production 0.637), validity 0.890, six presets. Only pore size CV dropped (0.72 → 0.60). Bundle 31.8 MB, over GitHub's 25 MB browser upload, so Matt sends it zipped for Claude to check and commit.
-- Trainer v0.3.1: the 414 rows with no solid conductivity are kept for everything but thermal (Matt approved). Rerun to pick them up.
+- Trainer v0.3.1: the 414 rows with no solid conductivity are kept for everything but thermal (Matt approved). They were two 207-row sweeps (gyroid, Schwarz D).
+- **Deployed: the v0.3.1 run** — 2,730 rows (2,473 usable), mean R² 0.660, validity 0.890 → 0.907, directionality 0.46 → 0.55; residual errors flat against the v0.3.0 run. 600 seeds, 100 per preset, real preset names in the menu. Checked in the session: header, round trip 600/600, forest parity, search smoke, Mesh parity (shape check caught the two designs off by 12+ points), preview parity, page check.
+- The 2026-05-19 bundle is still in git history (any commit before this one) for rollback.
 
 ---
 
