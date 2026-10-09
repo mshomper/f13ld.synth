@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F13LD.synth UI mockup v0.4</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Mockup only. Data is made up; the viewer and thumbnails are a real
+   raymarcher (F13LD-SHADE) so the layout can be judged with geometry. */
+:root{
+  --ground:#06080f; --surface:#0a0d16; --s1:#0c0e16; --s2:#12141f; --s3:#181b29;
+  --hair:rgba(255,255,255,0.07); --hair2:rgba(255,255,255,0.13);
+  --t1:#e4e6f2; --t2:#9a9fb7; --t3:#5f6582;
+  --neon:#c8f542; --neon-soft:rgba(200,245,66,0.10); --neon-ring:rgba(200,245,66,0.45);
+  --jade:#1D9E75; --petrol:#0A5566; --cyan:#4FB8C9; --cyan-ink:#7BD3E3; --cyan-soft:rgba(79,184,201,0.12); --cyan-ring:rgba(79,184,201,0.45);
+  --warn:#ffa028; --good:#5BB892; --lab:#E06A6F; --x:#7BD3E3; --y:#FFB670;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#03040a;color:var(--t1);font-family:'Exo 2',system-ui,sans-serif;min-height:100%}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+/* ── mockup chrome (not part of the design) ── */
+.mk-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:#0f1220;border-bottom:1px solid var(--hair2);font:12px var(--mono);color:var(--t2)}
+.mk-bar b{color:var(--t1);font-family:'Exo 2';font-weight:600;font-size:13px}
+.mk-seg{display:inline-flex;background:var(--s1);border:1px solid var(--hair);border-radius:7px;padding:2px;gap:2px}
+.mk-seg button{height:24px;padding:0 10px;border-radius:5px;font:500 11px var(--mono);color:var(--t2)}
+.mk-seg button.on{background:var(--neon-soft);color:var(--neon);box-shadow:inset 0 0 0 1px var(--neon-ring)}
+.mk-note{flex:1 1 300px;min-width:0;color:var(--t3);line-height:1.5}
+.mk-stage{display:flex;justify-content:center;padding:16px}
+.mk-stage.phone{padding:24px 16px}
+.mk-frame{width:100%;max-width:1440px;height:calc(100vh - 80px);min-height:720px;border:1px solid var(--hair2);border-radius:10px;overflow:hidden}
+.phone .mk-frame{width:390px;height:844px;min-height:0;border-radius:28px;border:6px solid #1c2030;overflow-y:auto;overflow-x:hidden}
+
+/* ── the app ── */
+.app{container-type:inline-size;container-name:app;height:100%;display:flex;flex-direction:column;background:var(--ground);position:relative;overflow:hidden}
+.phone .app{height:auto;min-height:100%;overflow:visible}
+
+/* header (shared F13LD header + Synth's model chip) */
+.hdr{display:flex;align-items:center;gap:10px;height:48px;padding:0 14px;border-bottom:0.5px solid #1a2a1a;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:8px}
+.wm{font-size:17px;font-weight:700;letter-spacing:0.1em}
+.div{width:0.5px;height:24px;background:#1a2a1a}
+.tool{font-size:15px;font-weight:700;letter-spacing:0.1em;color:var(--cyan)}
+.model-chip{height:30px;display:flex;align-items:center;gap:8px;padding:0 10px 0 6px;border:1px solid var(--hair2);border-radius:8px;background:var(--s1);font:11px var(--mono);color:var(--t2);min-width:0;white-space:nowrap;overflow:hidden}
+.model-chip b{color:var(--t1);font-family:'Exo 2';font-weight:600;font-size:12px}
+.model-chip .fresh{color:var(--warn)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pill{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border:0.5px solid var(--jade);border-radius:20px;background:rgba(29,158,117,0.08);color:var(--jade);font-weight:600;font-size:12px;white-space:nowrap}
+.pill:hover{background:rgba(29,158,117,0.18)}
+.pill.lab{border-color:#8C2A2E;background:rgba(140,42,46,0.10);color:var(--lab)}
+.pill.q{border-radius:20px 0 0 20px;padding-right:9px}
+.pill.qc{border-radius:0 20px 20px 0;padding:0 8px;margin-left:-8px;border-left-color:rgba(29,158,117,0.4)}
+.pill .g{width:13px;height:13px}
+.ver{font-size:10px;color:#2a3a2a;letter-spacing:0.1em}
+.tile{width:28px;height:28px;border-radius:7px;background:#E0F2F4;display:flex;align-items:center;justify-content:center}
+.pill-sub{font:500 10px var(--mono);opacity:.75}
+
+/* main grid */
+.main{flex:1;min-height:0;display:grid;gap:12px;padding:12px 14px}
+.layA .main{grid-template-columns:320px minmax(0,1.45fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+.layA .p-intent{grid-column:1;grid-row:1/3}
+.layA .p-view{grid-column:2;grid-row:1}
+.layA .p-insp{grid-column:3;grid-row:1}
+.layA .p-strip{grid-column:2/4;grid-row:2}
+.layB .main{grid-template-columns:320px minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+.layB .p-intent{grid-column:1;grid-row:1/3}
+.layB .p-map{grid-column:2;grid-row:1}
+.layB .p-insp{grid-column:3;grid-row:1/3}
+.layB .p-strip{grid-column:2;grid-row:2}
+.layA .p-map,.layB .p-view{display:none}
+
+.pnl{background:var(--surface);border:0.5px solid #23263a;border-radius:10px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.ph{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 12px 0 14px;border-bottom:1px solid var(--hair);flex-shrink:0}
+.ph h2{font:600 11px 'Exo 2';letter-spacing:0.12em;text-transform:uppercase;color:var(--t2)}
+.ph .sp{flex:1}
+.badge{height:22px;display:inline-flex;align-items:center;padding:0 8px;border-radius:11px;border:1px solid var(--hair2);font:500 10.5px var(--mono);color:var(--t2);white-space:nowrap}
+.seg{display:inline-flex;background:var(--s1);border:1px solid var(--hair);border-radius:7px;padding:2px;gap:2px;flex-shrink:0}
+.seg button{height:22px;padding:0 8px;border-radius:5px;font:500 10.5px var(--mono);color:var(--t2);display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.seg button:hover{color:var(--t1)}
+.seg button.on{background:var(--neon-soft);color:var(--neon);box-shadow:inset 0 0 0 1px var(--neon-ring)}
+.seg button.req.on{background:rgba(255,182,112,0.14);color:var(--y);box-shadow:inset 0 0 0 1px rgba(255,182,112,0.5)}
+.seg .g{width:12px;height:12px}
+.g{width:14px;height:14px;flex-shrink:0;display:inline-block;vertical-align:-2px}
+
+/* intent panel */
+.intent-body{flex:1;min-height:0;overflow-y:auto;padding:10px 12px 12px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;align-items:center;gap:8px}
+.row label{font:500 10.5px var(--mono);color:var(--t3);letter-spacing:0.04em;width:86px;flex-shrink:0}
+.sel{flex:1;min-width:0;height:28px;display:flex;align-items:center;gap:6px;padding:0 8px 0 10px;border:1px solid var(--hair2);border-radius:7px;background:var(--s1);font:11.5px var(--mono);color:var(--t1);white-space:nowrap;overflow:hidden}
+.sel span{overflow:hidden;text-overflow:ellipsis;flex:1;text-align:left}
+.sel em{font-style:normal;color:var(--t3);font-size:10.5px}
+.pad{border:1px solid var(--hair);border-radius:9px;background:var(--s1)}
+.pad.req{border-color:rgba(255,182,112,0.55)}
+.pad.pref{border-color:var(--neon-ring)}
+.pad-h{display:flex;align-items:center;gap:8px;padding:7px 8px 7px 10px}
+.pad-t{flex:1;min-width:0;font:600 11.5px 'Exo 2';letter-spacing:0.04em;line-height:1.3}
+.pad-t .x{color:var(--x)} .pad-t .y{color:var(--y)} .pad-t .vs{color:var(--t3);font-weight:400}
+.pad.off .pad-t{opacity:.55}
+.pad-svg{display:block;width:100%;height:auto;cursor:crosshair}
+.pad-ro{display:flex;justify-content:space-between;padding:4px 10px 8px;font:10.5px var(--mono);color:var(--t3)}
+.pad-ro b{color:var(--t1);font-weight:500}
+.hint{font:10.5px var(--mono);color:var(--t3);line-height:1.5}
+
+/* viewer */
+.view-body{flex:1;min-height:0;position:relative;background:radial-gradient(120% 90% at 50% 40%,#121c22,#06080f)}
+.view-body canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.vtools{position:absolute;top:10px;left:10px;display:flex;gap:6px;z-index:2}
+.vbtn{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 9px;border-radius:6px;background:rgba(6,8,15,.85);border:.5px solid #2a2a3a;font:10.5px var(--mono);color:#8a8aa0}
+.vbtn.on{color:var(--neon);border-color:var(--neon-ring)}
+.vlabel{position:absolute;left:12px;bottom:10px;font:10.5px var(--mono);color:var(--t3);z-index:2}
+.vlabel b{color:var(--t1);font-weight:500}
+
+/* inspector */
+.insp-body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.insp-top{display:flex;gap:12px;align-items:center;padding:12px 14px 10px}
+.rank{font:600 22px var(--mono);color:var(--cyan-ink)}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{height:20px;display:inline-flex;align-items:center;gap:5px;padding:0 7px;border-radius:4px;border:.5px solid var(--hair2);font:500 10px var(--mono);color:var(--t2);white-space:nowrap}
+.tag .dot{width:6px;height:6px;border-radius:50%}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--hair);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.kv div{background:var(--surface);padding:7px 12px;min-width:0}
+.kv span{display:block;font:9.5px var(--mono);color:var(--t3);letter-spacing:.06em;text-transform:uppercase}
+.kv b{font:600 14px var(--mono);font-variant-numeric:tabular-nums}
+.sec{padding:10px 14px 4px;font:600 10px 'Exo 2';letter-spacing:.12em;text-transform:uppercase;color:var(--t3);display:flex;align-items:center;gap:8px}
+.sec::after{content:'';flex:1;height:1px;background:var(--hair)}
+.bul{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:4px 14px}
+.bul .nm{font:11.5px var(--mono);color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bul .val{font:600 12px var(--mono);text-align:right;white-space:nowrap}
+.bul .val small{font-weight:400;color:var(--t3);font-size:10px;margin-left:3px}
+.bul svg{grid-column:1/-1;width:100%;height:16px;display:block}
+.oth{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;padding:4px 14px 12px;font:11.5px var(--mono);align-items:center}
+.oth .nm{color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.oth .nm.rough{color:var(--t3)}
+.oth .v{text-align:right;color:var(--t1);white-space:nowrap}
+.oth .v small{color:var(--t3);font-size:10px;margin-left:3px}
+.fit{width:30px;height:5px;border-radius:3px;background:var(--hair2);overflow:hidden}
+.fit i{display:block;height:100%;background:var(--good)}
+.fit.med i{background:var(--cyan)} .fit.low i{background:var(--warn)}
+.insp-act{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px 14px;border-top:1px solid var(--hair);margin-top:auto}
+.mini{height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:13px;border:1px solid var(--hair2);font:500 11px var(--mono);color:var(--t2);white-space:nowrap}
+.mini:hover{color:var(--t1);border-color:var(--neon-ring)}
+.mini .g{width:12px;height:12px}
+.mini.mesh{border-color:rgba(29,158,117,.6);color:var(--jade)}
+.mini.lab{border-color:rgba(140,42,46,.8);color:var(--lab)}
+.insp-view{height:210px;position:relative;flex-shrink:0;background:radial-gradient(120% 90% at 50% 40%,#121c22,#06080f);border-bottom:1px solid var(--hair)}
+.insp-view canvas{position:absolute;inset:0;width:100%;height:100%}
+.layA .insp-view{display:none}
+
+/* candidate strip */
+.strip{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;padding:10px 12px 12px}
+.layB .strip{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cand{border:1px solid var(--hair);border-radius:8px;background:var(--s1);padding:6px;display:flex;flex-direction:column;gap:5px;cursor:pointer;min-width:0;text-align:left}
+.cand:hover{border-color:var(--hair2)}
+.cand.on{border-color:var(--neon-ring);box-shadow:0 0 0 1px var(--neon-ring) inset;background:#10140e}
+.cand img{width:100%;aspect-ratio:1;border-radius:5px;display:block;background:#06080f}
+.cand-h{display:flex;align-items:center;gap:5px;font:600 11px var(--mono);color:var(--cyan-ink)}
+.cand-h .sc{margin-left:auto;color:var(--t1)}
+.sbar{height:3px;border-radius:2px;background:var(--hair2);overflow:hidden}
+.sbar i{display:block;height:100%}
+.cand-m{font:10px var(--mono);color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand-m b{color:var(--t2);font-weight:500}
+
+/* map (layout B) */
+.map-body{flex:1;min-height:0;position:relative}
+.map-body svg{position:absolute;inset:0;width:100%;height:100%}
+
+/* dock + drawer */
+.dock{height:50px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 14px;border-top:1px solid var(--hair);background:var(--surface);position:relative;z-index:31}
+.cfg{height:32px;display:inline-flex;align-items:center;gap:8px;padding:0 10px 0 6px;border:1px solid var(--hair2);border-radius:8px;font:600 12.5px 'Exo 2';flex-shrink:0}
+.cfg.on{border-color:var(--neon-ring)}
+.ico{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:rgba(79,184,201,0.13);color:#a9e2eb;box-shadow:inset 0 0 0 1px rgba(79,184,201,0.28);flex-shrink:0}
+.ico svg{width:72%;height:72%;overflow:visible}
+.ico .acc{fill:var(--neon);stroke:#0A5566;stroke-width:1.4}
+.ico-sm{width:18px;height:18px;border-radius:5px} .ico-md{width:22px;height:22px}
+.dtag{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 9px 0 5px;border-radius:7px;background:var(--s1);border:1px solid var(--hair);font:500 11px var(--mono);color:var(--t2);white-space:nowrap;flex-shrink:1;min-width:0;overflow:hidden}
+.dtag b{font:600 11.5px 'Exo 2';color:var(--t1)}
+.dtags{display:flex;gap:6px;min-width:0;overflow:hidden;flex:0 1 auto}
+.status{flex:1;min-width:0;font:11px var(--mono);color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;padding-right:6px}
+.status b{color:var(--t2);font-weight:500}
+.run{height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:8px;background:rgba(79,184,201,0.18);border:1px solid var(--cyan);color:var(--cyan-ink);font:600 13px 'Exo 2';letter-spacing:0.06em;flex-shrink:0}
+.run:hover{background:rgba(79,184,201,0.28)}
+.run .g{width:13px;height:13px}
+.drawer{display:none;position:absolute;left:0;right:0;bottom:50px;z-index:30;background:#0f111a;border-top:1px solid var(--hair2);box-shadow:0 -12px 30px rgba(0,0,0,.5);max-height:70%;overflow-y:auto}
+.drawer.open{display:block}
+.dr-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding:16px 18px 18px}
+.dr-col h3{display:flex;align-items:center;gap:8px;font:600 11px 'Exo 2';letter-spacing:.12em;text-transform:uppercase;color:var(--t2);margin-bottom:10px}
+.fld{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.fld div{display:flex;align-items:center;gap:6px;height:30px;padding:0 8px;border:1px solid var(--hair2);border-radius:6px;background:var(--s1);font:11.5px var(--mono);min-width:0}
+.fld div span{color:var(--t3)} .fld div b{margin-left:auto;font-weight:500} .fld div i{font-style:normal;color:var(--t3);font-size:10px}
+.fld .full{grid-column:1/-1}
+.r2row{display:grid;grid-template-columns:minmax(0,1fr) 90px 38px;gap:8px;align-items:center;font:11px var(--mono);color:var(--t2);padding:2px 0}
+.r2row .bar{height:6px;border-radius:3px;background:var(--hair2);overflow:hidden}
+.r2row .bar i{display:block;height:100%}
+.r2row b{text-align:right;font-weight:500;color:var(--t1)}
+.dr-note{font:10.5px var(--mono);color:var(--t3);line-height:1.55;margin-top:10px}
+.lineage{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+
+/* ── narrow (phone) — container query, so the phone frame shows it ── */
+@container app (max-width: 700px){
+  .hdr{flex-wrap:wrap;height:auto;padding:8px 12px 10px;row-gap:8px}
+  .model-chip{order:3;flex:1 1 100%}
+  .hdr-right{display:contents}
+  .ver,.tile{order:1}
+  .tile{margin-left:auto}
+  .pill{order:4;flex:1 1 0;justify-content:center;padding:0 6px;min-width:0}
+  .pill.q{flex:1.3 1 0} .pill.qc{flex:0 0 28px;margin-left:-8px}
+  .main{display:flex !important;flex-direction:column;padding:10px;gap:10px;overflow:visible}
+  .p-view{order:1;min-height:0} .p-view .view-body{height:300px;flex:none}
+  .p-map{order:1} .p-map .map-body{height:300px;flex:none}
+  .p-strip{order:2} .p-insp{order:3} .p-intent{order:4}
+  .layA .p-map,.layB .p-view{display:none}
+  .layB .p-view{display:none}
+  .strip,.layB .strip{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:8px}
+  .cand-m{display:none}
+  .ph{flex-wrap:wrap;row-gap:6px;padding:6px 10px}
+  .ph .sp{flex-basis:0}
+  .mc-d{display:none}
+  .insp-body,.intent-body{overflow:visible}
+  .layB .insp-view{display:none}
+  .dock{position:sticky;bottom:0;padding:0 10px}
+  .dtags,.status{display:none}
+  .run{margin-left:auto}
+  .drawer{position:fixed;bottom:auto;top:auto;max-height:none}
+  .dr-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="mk-bar">
+  <b>F13LD.synth · UI mockup v0.4</b>
+  <div class="mk-seg" id="mkLayout"><button data-v="A" class="on">A · viewer hero</button><button data-v="B">B · result map</button></div>
+  <div class="mk-seg" id="mkDevice"><button data-v="desk" class="on">Desktop</button><button data-v="phone">Phone</button></div>
+  <span class="mk-note">Made-up numbers. Click candidates, drag the pads, toggle pads off / prefer / require, open Configure. The viewer is a live raymarcher; drag it to orbit.</span>
+</div>
+
+<div class="mk-stage" id="stage">
+ <div class="mk-frame">
+  <div class="app layA" id="app">
+
+   <header class="hdr">
+     <div class="brand">
+       <svg width="24" height="24" viewBox="0 0 100 100"><defs><clipPath id="f13c"><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z"/></clipPath></defs><path d="M50,5 C91,5 95,9 95,50 C95,91 91,95 50,95 C9,95 5,91 5,50 C5,9 9,5 50,5Z" fill="#111e13" stroke="#1D9E75" stroke-width="5"/><g clip-path="url(#f13c)" fill="none"><path d="M0,50 Q25,40 50,50 Q75,60 100,50" stroke="#c8f542" stroke-width="6"/><path d="M50,0 Q40,25 50,50 Q60,75 50,100" stroke="#c8f542" stroke-width="6"/><path d="M0,31 Q25,21 50,31 Q75,41 100,31" stroke="#2c4e30" stroke-width="3"/><path d="M0,69 Q25,59 50,69 Q75,79 100,69" stroke="#2c4e30" stroke-width="3"/><path d="M31,0 Q21,25 31,50 Q41,75 31,100" stroke="#2c4e30" stroke-width="3"/><path d="M69,0 Q59,25 69,50 Q79,75 69,100" stroke="#2c4e30" stroke-width="3"/><circle cx="50" cy="50" r="7" fill="#c8f542"/></g></svg>
+       <div class="wm"><span style="color:#1D9E75">F</span><span style="color:#c8f542">13</span><span style="color:#1D9E75">LD</span></div>
+     </div>
+     <div class="div"></div>
+     <div class="tool">SYNTH</div>
+     <button class="model-chip" title="Model details are in Configure"><span class="ico ico-sm" data-ico="model"></span><b>tpms model</b><span class="mc-d">trained 2026-05-19 · 1,852 designs ·</span> R² 0.64 · <span class="fresh">+214 new in Vault</span></button>
+     <div class="hdr-right">
+       <button class="pill q" title="Add the selected candidate to F13LD.queue"><svg class="g" viewBox="0 0 16 16" data-gl="queue"></svg>Queue</button><button class="pill qc" title="Choose which queue"><svg class="g" viewBox="0 0 16 16" data-gl="chev"></svg></button>
+       <button class="pill" title="Open the selected candidate in F13LD.mesh"><svg class="g" viewBox="0 0 16 16" data-gl="mesh"></svg>Mesh <span class="pill-sub" data-selno>#1</span></button>
+       <button class="pill lab" title="Open the selected candidate in F13LD.lab for a full solve"><svg class="g" viewBox="0 0 16 16" data-gl="lab"></svg>Lab <span class="pill-sub" data-selno>#1</span></button>
+       <span class="ver">v0.4.0</span>
+       <div class="tile"><svg width="18" height="18" viewBox="0 0 40 40"><circle cx="20" cy="20" r="13" fill="none" stroke="#0A5566" stroke-width="1.6"/><circle cx="20" cy="20" r="7" fill="none" stroke="#0A5566" stroke-width="1.4"/><circle cx="20" cy="20" r="2" fill="#0A5566"/><path d="M20 3V9M20 31V37M3 20H9M31 20H37" stroke="#0A5566" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+     </div>
+   </header>
+
+   <main class="main">
+     <!-- INTENT -->
+     <section class="pnl p-intent">
+       <div class="ph"><span class="ico ico-md" data-ico="intent"></span><h2>Design intent</h2><span class="sp"></span><span class="badge" id="nActive">1 pad on</span></div>
+       <div class="intent-body">
+         <div class="row"><label>PRESET</label><button class="sel"><span>any preset</span><em>7 groups</em><svg class="g" viewBox="0 0 16 16" data-gl="chev"></svg></button></div>
+         <div class="row"><label>CONNECTED</label>
+           <div class="seg" id="conn"><button data-v="1" title="Connected along one axis"><svg class="g" viewBox="0 0 16 16" data-gl="ax1"></svg>1</button><button data-v="2" title="Connected along two axes"><svg class="g" viewBox="0 0 16 16" data-gl="ax2"></svg>2</button><button data-v="3" class="on" title="Connected along all three axes"><svg class="g" viewBox="0 0 16 16" data-gl="ax3"></svg>3 axes</button></div>
+         </div>
+         <div id="pads" style="display:flex;flex-direction:column;gap:8px"></div>
+         <p class="hint">Drag the dot to set a target. Prefer is a soft target, require counts double. After a search the eight results appear on each pad as numbered dots, so you can see how close they landed.</p>
+       </div>
+     </section>
+
+     <!-- VIEWER (A) -->
+     <section class="pnl p-view">
+       <div class="ph"><span class="ico ico-md" data-ico="cell"></span><h2>Preview</h2><span class="badge" data-selbadge>#1 · solid · F-RD</span><span class="sp"></span>
+         <div class="seg" id="tiling"><button data-v="1" class="on">1 cell</button><button data-v="2">2×2×2</button></div></div>
+       <div class="view-body" id="viewHost">
+         <div class="vtools"><button class="vbtn"><svg class="g" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5 A5.5 5.5 0 0 1 8 13.5 Z" fill="currentColor"/></svg>view</button><button class="vbtn" id="clipBtn"><svg class="g" viewBox="0 0 16 16" data-gl="clip"></svg>clip</button><button class="vbtn"><svg class="g" viewBox="0 0 16 16" data-gl="reset"></svg>reset</button></div>
+         <div class="vlabel">mode <b data-mode>solid</b> · cell <b>2.0 mm</b> · what Mesh and Lab will build</div>
+       </div>
+     </section>
+
+     <!-- MAP (B) -->
+     <section class="pnl p-map">
+       <div class="ph"><span class="ico ico-md" data-ico="map"></span><h2>Result map</h2><span class="sp"></span>
+         <div class="seg" id="mapAx"><button class="on">Stiffness × Pore</button><button>Aniso × Pore CV</button><button>Volume × Thermal</button></div></div>
+       <div class="map-body"><svg id="mapSvg" viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet"></svg></div>
+     </section>
+
+     <!-- INSPECTOR -->
+     <section class="pnl p-insp">
+       <div class="ph"><span class="ico ico-md" data-ico="inspect"></span><h2>Candidate</h2><span class="sp"></span><span class="badge">grown from training seed 126</span></div>
+       <div class="insp-body">
+         <div class="insp-view" id="inspViewHost"></div>
+         <div class="insp-top"><div class="rank" id="iRank">#1</div><div class="tags" id="iTags"></div></div>
+         <div class="kv"><div><span>match</span><b id="iScore">79%</b></div><div><span>valid</span><b id="iValid">96%</b></div><div><span>confidence</span><b id="iConf">high</b></div></div>
+         <div class="sec">targets</div>
+         <div id="iBul"></div>
+         <div class="sec">other predictions</div>
+         <div class="oth" id="iOth"></div>
+         <div class="insp-act">
+           <button class="mini mesh"><svg class="g" viewBox="0 0 16 16" data-gl="mesh"></svg>Open in Mesh</button>
+           <button class="mini lab"><svg class="g" viewBox="0 0 16 16" data-gl="lab"></svg>Open in Lab</button>
+           <button class="mini"><svg class="g" viewBox="0 0 16 16" data-gl="copy"></svg>Copy recipe</button>
+         </div>
+       </div>
+     </section>
+
+     <!-- STRIP -->
+     <section class="pnl p-strip">
+       <div class="ph"><span class="ico ico-md" data-ico="ranks"></span><h2>Candidates</h2><span class="badge">8 of 6,400 scored</span><span class="sp"></span>
+         <div class="seg"><button class="on">Best match</button><button>Most confident</button><button>Lightest</button></div></div>
+       <div class="strip" id="strip"></div>
+     </section>
+   </main>
+
+   <div class="drawer" id="drawer">
+     <div class="dr-grid">
+       <div class="dr-col">
+         <h3><span class="ico ico-sm" data-ico="material"></span>Material</h3>
+         <div class="fld">
+           <div class="full"><span>material</span><b>Ti-6Al-4V Grade 5 (HIP)</b></div>
+           <div><span>Es</span><b>110</b><i>GPa</i></div><div><span>ρ</span><b>4.43</b><i>g/cc</i></div>
+           <div><span>ks</span><b>7.0</b><i>W/mK</i></div><div><span>σ ref</span><b>—</b><i>MPa</i></div>
+           <div class="full"><span>cell size</span><b>2.0</b><i>mm</i></div>
+         </div>
+         <p class="dr-note">Same library as F13LD.lab. Shared with F13LD.vault. Only changes how values are shown, never the search.</p>
+       </div>
+       <div class="dr-col">
+         <h3><span class="ico ico-sm" data-ico="model"></span>Model fit (held-out R²)</h3>
+         <div id="r2"></div>
+         <div class="lineage"><span class="tag">trained 2026-05-19</span><span class="tag">1,852 valid designs</span><span class="tag" style="color:var(--warn);border-color:rgba(255,160,40,.4)">+214 since · retrain warranted</span></div>
+       </div>
+       <div class="dr-col">
+         <h3><span class="ico ico-sm" data-ico="sliders"></span>Search</h3>
+         <div class="fld">
+           <div class="full"><span>family</span><b>TPMS</b><i>noise, grain soon</i></div>
+           <div><span>explore</span><b>4,000</b></div><div><span>refine</span><b>16 × 150</b></div>
+           <div><span>results</span><b>8</b></div><div><span>per seed</span><b>≤ 2</b></div>
+         </div>
+         <p class="dr-note">Each candidate is a real training design varied the way Sweep varies a recipe, scored exactly as it will be built.</p>
+       </div>
+     </div>
+   </div>
+
+   <footer class="dock">
+     <button class="cfg" id="cfgBtn"><span class="ico ico-md" data-ico="sliders"></span>Configure<svg class="g" viewBox="0 0 16 16" data-gl="chev"></svg></button>
+     <div class="dtags">
+       <span class="dtag"><span class="ico ico-sm" data-ico="material"></span><b>Ti-6Al-4V</b>110 GPa</span>
+       <span class="dtag"><span class="ico ico-sm" data-ico="cell"></span><b>cell</b>2.0 mm</span>
+       <span class="dtag"><span class="ico ico-sm" data-ico="ranks"></span><b>4,000</b>+ refine</span>
+     </div>
+     <span class="status"><b>6,400 designs</b> scored in 0.4 s on 8 workers · 2,961 off-connectivity</span>
+     <button class="run"><svg class="g" viewBox="0 0 16 16" data-gl="play"></svg>Synthesize</button>
+   </footer>
+  </div>
+ </div>
+</div>
+
+<script>
+/* ── icons (Sweep / Lab brand style) ── */
+const SV=' fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS={
+  intent:'<circle cx="20" cy="20" r="14"'+SV+'/><path d="M20 3 V10 M20 30 V37 M3 20 H10 M30 20 H37"'+SV+' opacity=".7"/><circle class="acc" cx="20" cy="20" r="4"/>',
+  cell:'<path d="M20 4 L34 12 V28 L20 36 L6 28 V12 Z"'+SV+'/><path d="M20 12 L27 16 V24 L20 28 L13 24 V16 Z"'+SV+' stroke-width="2" opacity=".55"/><circle class="acc" cx="20" cy="20" r="3.2"/>',
+  map:'<path d="M6 34 V6 M6 34 H34"'+SV+'/><circle cx="14" cy="26" r="2" fill="currentColor"/><circle cx="20" cy="18" r="2" fill="currentColor" opacity=".6"/><circle cx="28" cy="22" r="2" fill="currentColor" opacity=".6"/><circle class="acc" cx="24" cy="12" r="3.6"/>',
+  inspect:'<circle cx="17" cy="17" r="10"'+SV+'/><path d="M24.5 24.5 L34 34"'+SV+'/><circle class="acc" cx="17" cy="17" r="3.4"/>',
+  ranks:'<path d="M5 35 H35"'+SV+' opacity=".6"/><path d="M8 35 V25 H15 V35 M16.5 35 V17 H23.5 V35 M25 35 V11 H32 V35"'+SV+'/><circle class="acc" cx="28.5" cy="5.5" r="3.1"/>',
+  sliders:'<path d="M5 11 H9.5 M18.5 11 H35 M5 29 H21.5 M30.5 29 H35"'+SV+'/><circle cx="14" cy="11" r="4.5"'+SV+'/><circle class="acc" cx="26" cy="29" r="4"/>',
+  material:'<path d="M20 4 L34 12 V28 L20 36 L6 28 V12 Z"'+SV+'/><path d="M6 12 L20 20 L34 12 M20 20 V36"'+SV+' opacity=".7"/><circle class="acc" cx="20" cy="20" r="3.4"/>',
+  model:'<path d="M20 5 V13 M20 13 L10 23 M20 13 L30 23 M10 23 L5 33 M10 23 L15 33 M30 23 L25 33 M30 23 L35 33"'+SV+'/><circle class="acc" cx="20" cy="13" r="3.4"/>'
+};
+const GS=' fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
+const GL={
+  play:'<path d="M4.5 2.8 L12.8 8 L4.5 13.2 Z" fill="currentColor"/>',
+  chev:'<path d="M4.5 6.2 L8 9.7 L11.5 6.2"'+GS+'/>',
+  copy:'<path d="M5.5 5.5 H12.5 V13 H5.5 Z"'+GS+'/><path d="M3.5 10.5 V3 H10"'+GS+'/>',
+  reset:'<path d="M3.6 8 a4.4 4.4 0 1 0 1.3 -3.1 M3.4 2.6 V5.3 H6.1"'+GS+'/>',
+  mesh:'<path d="M8 1.8 L13.4 4.9 V11.1 L8 14.2 L2.6 11.1 V4.9 Z"'+GS+'/><path d="M2.6 4.9 L8 8 L13.4 4.9 M8 8 V14.2"'+GS+' opacity=".6"/>',
+  lab:'<path d="M6 2 H10 M6.6 2 V6.4 L2.8 12.6 A1 1 0 0 0 3.7 14 H12.3 A1 1 0 0 0 13.2 12.6 L9.4 6.4 V2"'+GS+'/><path d="M4.6 10 H11.4"'+GS+' opacity=".6"/>',
+  queue:'<path d="M2.5 4 H10 M2.5 8 H10 M2.5 12 H7"'+GS+'/><path d="M12 9.5 V14.5 M9.5 12 H14.5"'+GS+'/>',
+  clip:'<path d="M3 13 L13 3"'+GS+'/><path d="M3 6 H8 V3 M13 10 H8 V13"'+GS+' opacity=".6"/>',
+  ax1:'<path d="M2 8 H14 M11.5 5.5 L14 8 L11.5 10.5"'+GS+'/>',
+  ax2:'<path d="M3 13 H14 M11.5 10.5 L14 13 L11.5 15.5 M3 13 V2 M0.5 4.5 L3 2 L5.5 4.5"'+GS+'/>',
+  ax3:'<path d="M6 10 H15 M6 10 V1 M6 10 L1 15"'+GS+'/><circle cx="6" cy="10" r="1.3" fill="currentColor"/>'
+};
+function paintIcons(root){
+  root.querySelectorAll('[data-ico]').forEach(e=>{e.innerHTML='<svg viewBox="0 0 40 40">'+ICONS[e.dataset.ico]+'</svg>';});
+  root.querySelectorAll('svg[data-gl]').forEach(e=>{e.innerHTML=GL[e.dataset.gl];});
+}
+paintIcons(document);
+
+/* ── made-up data ── */
+const T=(c,f,ph)=>({coef:c,f,ph:ph||[0,0,0]});
+const F=(fn,ax,k)=>[fn,ax,k||1];   // fn 1 sin 2 cos; ax 0 x 1 y 2 z
+const SKEL={
+  gyroid:[T(1,[F(1,0),F(2,1)]),T(1,[F(1,1),F(2,2)]),T(1,[F(1,2),F(2,0)])],
+  schwarzD:[T(1,[F(1,0),F(1,1)]),T(-1,[F(1,0),F(2,2)]),T(1,[F(2,0),F(1,2)]),T(-1,[F(2,1),F(2,2)])],
+  frd:[T(1,[F(1,0,2),F(2,1),F(1,2)]),T(1,[F(1,0),F(1,1,2),F(2,2)]),T(1,[F(2,0),F(1,1),F(1,2,2)]),T(-1,[F(2,0,2),F(2,1,2)]),T(-1,[F(2,1,2),F(2,2,2)]),T(-1,[F(2,2,2),F(2,0,2)])],
+  fks:[T(1,[F(2,0,2),F(1,1),F(2,2)]),T(1,[F(2,1,2),F(1,2),F(2,0)]),T(1,[F(2,2,2),F(1,0),F(2,1)])]
+};
+function vary(sk,seed){let s=seed;const r=()=>{s=(s*16807)%2147483647;return s/2147483647};return sk.map(t=>({coef:+(t.coef*(0.6+0.8*r())).toFixed(3),f:t.f.map(x=>x.slice()),ph:t.ph}));}
+const C=[
+  {preset:'F-RD',mode:'solid',sk:'frd',off:-0.15,score:.79,valid:.96,conf:'high',vf:46.9,ex:.205,ey:.098,ez:.194,pore:.11,cv:.64,k:.29,sc:2.3,dir:.86,an:3.2},
+  {preset:'F-RD',mode:'solid',sk:'frd',off:-0.25,score:.77,valid:.94,conf:'high',vf:47.0,ex:.24,ey:.10,ez:.21,pore:.10,cv:.63,k:.29,sc:2.5,dir:.84,an:3.1},
+  {preset:'gyroid',mode:'shell',sk:'gyroid',wt:.32,score:.74,valid:.99,conf:'high',vf:32.8,ex:.25,ey:.21,ez:.22,pore:.18,cv:.52,k:.18,sc:3.4,dir:.97,an:1.3},
+  {preset:'Schwarz D',mode:'shell',sk:'schwarzD',wt:.28,score:.71,valid:.97,conf:'medium',vf:30.1,ex:.22,ey:.22,ez:.20,pore:.17,cv:.48,k:.16,sc:3.1,dir:.95,an:1.2},
+  {preset:'gyroid',mode:'pi-tpms',sk:'gyroid',pipe:.20,ps:[.25,.125,0],score:.66,valid:.91,conf:'medium',vf:12.4,ex:.09,ey:.08,ez:.08,pore:.29,cv:.58,k:.07,sc:1.9,dir:.91,an:1.4},
+  {preset:'Fischer-Koch S',mode:'shell',sk:'fks',wt:.30,score:.62,valid:.95,conf:'high',vf:28.0,ex:.17,ey:.16,ez:.18,pore:.15,cv:.55,k:.13,sc:2.8,dir:.93,an:1.3},
+  {preset:'Schwarz D',mode:'solid',sk:'schwarzD',off:.1,score:.58,valid:.88,conf:'low',vf:22.1,ex:.09,ey:.10,ez:.01,pore:.14,cv:.63,k:.06,sc:1.9,dir:.90,an:3.1},
+  {preset:'F-RD',mode:'solid',sk:'frd',off:-.35,score:.55,valid:.84,conf:'low',vf:22.9,ex:.11,ey:.05,ez:.01,pore:.15,cv:.63,k:.06,sc:2.0,dir:.89,an:3.7}
+].map((c,i)=>Object.assign(c,{i,terms:vary(SKEL[c.sk],7+i*31)}));
+const R2={volume_fraction:.91,ex:.76,ey:.67,ez:.60,anisotropy:-.03,pore:.50,cv:.72,k:.88,sc:.86,dir:.49};
+const SIG={ex:.03,ey:.03,ez:.03,pore:.06,vf:4,k:.04,an:.6,cv:.15};
+let sel=0;
+
+/* pads */
+const PADS=[
+  {id:'mp',x:'Stiffness',y:'Pore size',xk:'ex',yk:'pore',xr:[.005,.5],yr:[.04,.5],tx:.5,ty:.5,mode:'req',corners:['compliant · large pores','stiff · large pores','compliant · tight pores','stiff · tight pores'],fmt:[v=>(v*110).toFixed(1)+' GPa',v=>(v*2000).toFixed(0)+' µm']},
+  {id:'ap',x:'Anisotropy',y:'Pore size CV',xk:'an',yk:'cv',xr:[1,5],yr:[.4,.9],tx:0,ty:0,mode:'off',corners:['isotropic · varied','directional · varied','isotropic · uniform','directional · uniform'],fmt:[v=>v.toFixed(2)+'×',v=>v.toFixed(2)]},
+  {id:'vt',x:'Volume fraction',y:'Thermal cond.',xk:'vf',yk:'k',xr:[2,50],yr:[.005,.4],tx:.3,ty:.3,mode:'off',corners:['light · conductive','dense · conductive','light · insulating','dense · insulating'],fmt:[v=>v.toFixed(0)+' %',v=>(v*7).toFixed(2)+' W/mK']}
+];
+const W=300,H=150,P=20;
+function padSVG(p){
+  const sx=v=>P+(v-p.xr[0])/(p.xr[1]-p.xr[0])*(W-2*P), sy=v=>H-P-(v-p.yr[0])/(p.yr[1]-p.yr[0])*(H-2*P);
+  let dots='';
+  if(p.mode!=='off') C.forEach((c,i)=>{const x=sx(c[p.xk]),y=sy(c[p.yk]);if(x<P||x>W-P||y<P||y>H-P)return;
+    dots+=`<g opacity="${i===sel?1:.75}"><circle cx="${x}" cy="${y}" r="${i===sel?7.5:6}" fill="${i===sel?'#c8f542':'#0c1a24'}" stroke="${i===sel?'#c8f542':'#4FB8C9'}" stroke-width="1"/><text x="${x}" y="${y+3}" text-anchor="middle" font-family="IBM Plex Mono" font-size="8" font-weight="600" fill="${i===sel?'#0a1206':'#7BD3E3'}">${i+1}</text></g>`;});
+  const tx=P+p.tx*(W-2*P),ty=H-P-p.ty*(H-2*P), col=p.mode==='req'?'#FFB670':'#c8f542';
+  const cl=(s,x,y,a)=>{const[q,r]=s.split(' · ');return `<text x="${x}" y="${y}" text-anchor="${a}" font-family="IBM Plex Mono" font-size="8.5" fill="#5f6582"><tspan x="${x}">${q}</tspan><tspan x="${x}" dy="10">${r}</tspan></text>`};
+  return `<svg class="pad-svg" viewBox="0 0 ${W} ${H}" data-pad="${p.id}">
+   <rect x="${P}" y="${P}" width="${W-2*P}" height="${H-2*P}" fill="#080b12" stroke="rgba(255,255,255,.07)"/>
+   <path d="M${W/2} ${P}V${H-P}M${P} ${H/2}H${W-P}" stroke="rgba(255,255,255,.05)"/>
+   ${cl(p.corners[0],P+5,P+11,'start')}${cl(p.corners[1],W-P-5,P+11,'end')}${cl(p.corners[2],P+5,H-P-15,'start')}${cl(p.corners[3],W-P-5,H-P-15,'end')}
+   <text x="${W/2}" y="${H-5}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#7BD3E3">${p.x.toLowerCase()} →</text>
+   <text x="9" y="${H/2}" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#FFB670" transform="rotate(-90 9 ${H/2})">${p.y.toLowerCase()} →</text>
+   ${dots}
+   <circle cx="${tx}" cy="${ty}" r="11" fill="none" stroke="${col}" stroke-width="1.4" opacity=".45"/><circle cx="${tx}" cy="${ty}" r="5" fill="#0a1820" stroke="${col}" stroke-width="2"/>
+   <path d="M${tx-16} ${ty}H${tx-9}M${tx+9} ${ty}H${tx+16}M${tx} ${ty-16}V${ty-9}M${tx} ${ty+9}V${ty+16}" stroke="${col}" stroke-width="1" opacity=".6"/>
+  </svg>`;
+}
+function renderPads(){
+  const box=document.getElementById('pads');
+  box.innerHTML=PADS.map(p=>{
+    const tv=[p.xr[0]+p.tx*(p.xr[1]-p.xr[0]),p.yr[0]+p.ty*(p.yr[1]-p.yr[0])];
+    return `<div class="pad ${p.mode==='req'?'req':p.mode==='pref'?'pref':'off'}">
+      <div class="pad-h"><div class="pad-t"><span class="x">${p.x}</span><span class="vs"> × </span><span class="y">${p.y}</span></div>
+      <div class="seg" data-padmode="${p.id}"><button data-m="off" class="${p.mode==='off'?'on':''}">off</button><button data-m="pref" class="${p.mode==='pref'?'on':''}">prefer</button><button data-m="req" class="req ${p.mode==='req'?'on':''}">require</button></div></div>
+      ${p.mode==='off'?'':padSVG(p)+`<div class="pad-ro"><span>target <b>${p.fmt[0](tv[0])}</b></span><span><b>${p.fmt[1](tv[1])}</b></span></div>`}
+    </div>`;}).join('');
+  document.getElementById('nActive').textContent=PADS.filter(p=>p.mode!=='off').length+' pad'+(PADS.filter(p=>p.mode!=='off').length===1?'':'s')+' on';
+  box.querySelectorAll('[data-padmode] button').forEach(b=>b.onclick=()=>{PADS.find(p=>p.id===b.parentNode.dataset.padmode).mode=b.dataset.m;renderPads();});
+  box.querySelectorAll('svg[data-pad]').forEach(svg=>{
+    const p=PADS.find(q=>q.id===svg.dataset.pad);let drag=false;
+    const mv=e=>{const r=svg.getBoundingClientRect();p.tx=Math.max(0,Math.min(1,((e.clientX-r.left)*W/r.width-P)/(W-2*P)));p.ty=Math.max(0,Math.min(1,1-((e.clientY-r.top)*H/r.height-P)/(H-2*P)));};
+    svg.onpointerdown=e=>{drag=true;svg.setPointerCapture(e.pointerId);mv(e);};
+    svg.onpointermove=e=>{if(drag)mv(e);};
+    svg.onpointerup=()=>{drag=false;renderPads();};
+  });
+}
+
+/* inspector */
+const fmtGPa=v=>(v*110).toFixed(1);
+function zColor(z){const a=Math.min(Math.abs(z),3);return a<.5?'#22c55e':a<1?'#84cc16':a<1.5?'#eab308':a<2?'#f59e0b':a<3?'#f97316':'#dc2626';}
+function bullet(name,val,unit,pred,target,lo,hi,sig){
+  const s=v=>4+(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*292, z=(pred-target)/sig, c=zColor(z);
+  return `<div class="nm">${name}</div><div class="val" style="color:${c}">${val}<small>${unit}</small> <small>${z>=0?'+':''}${z.toFixed(1)}σ</small></div>
+  <svg viewBox="0 0 300 16" preserveAspectRatio="none"><rect x="4" y="7" width="292" height="2" rx="1" fill="rgba(255,255,255,.1)"/>
+   <rect x="${s(pred-sig)}" y="4" width="${Math.max(2,s(pred+sig)-s(pred-sig))}" height="8" rx="2" fill="${c}" opacity=".22"/>
+   <path d="M${s(target)} 1V15" stroke="#FFB670" stroke-width="2"/>
+   <circle cx="${s(pred)}" cy="8" r="4" fill="${c}"/></svg>`;
+}
+function fitBar(r){const cls=r>=.7?'':r>=.4?'med':'low';return `<span class="fit ${cls}" title="model fit R² ${r.toFixed(2)}"><i style="width:${Math.max(4,r*100)}%"></i></span>`;}
+function renderInsp(){
+  const c=C[sel];
+  document.getElementById('iRank').textContent='#'+(sel+1);
+  const cd={high:'#5BB892',medium:'#4FB8C9',low:'#ffa028'}[c.conf];
+  document.getElementById('iTags').innerHTML=`<span class="tag">${c.preset}</span><span class="tag">${c.mode}</span><span class="tag" style="color:${cd};border-color:${cd}66"><span class="dot" style="background:${cd}"></span>${c.conf} confidence</span>`;
+  document.getElementById('iScore').textContent=Math.round(c.score*100)+'%';
+  document.getElementById('iValid').textContent=Math.round(c.valid*100)+'%';
+  const ic=document.getElementById('iConf');ic.textContent=c.conf;ic.style.color=cd;
+  document.querySelectorAll('[data-selno]').forEach(e=>e.textContent='#'+(sel+1));
+  document.querySelectorAll('[data-selbadge]').forEach(e=>e.textContent=`#${sel+1} · ${c.mode} · ${c.preset}`);
+  document.querySelectorAll('[data-mode]').forEach(e=>e.textContent=c.mode);
+  const t=.005+.5*(.495), tp=.04+.5*.46;
+  document.getElementById('iBul').innerHTML='<div class="bul">'+
+    bullet('Stiffness Ex',fmtGPa(c.ex),'GPa',c.ex,t,.005,.5,SIG.ex)+
+    bullet('Stiffness Ey',fmtGPa(c.ey),'GPa',c.ey,t,.005,.5,SIG.ey)+
+    bullet('Stiffness Ez',fmtGPa(c.ez),'GPa',c.ez,t,.005,.5,SIG.ez)+
+    bullet('Median pore',(c.pore*2000).toFixed(0),'µm',c.pore,tp,.04,.5,SIG.pore)+'</div>';
+  const rows=[['Volume fraction',c.vf.toFixed(1),'%',R2.volume_fraction],['Thermal cond.',(c.k*7).toFixed(2),'W/mK',R2.k],['Pore size CV',c.cv.toFixed(2),'',R2.cv],['Surface complexity',c.sc.toFixed(2),'',R2.sc],['Connected axes',(c.dir*3).toFixed(1),'/ 3',R2.dir],['Anisotropy',c.an.toFixed(2),'×',R2.anisotropy]];
+  document.getElementById('iOth').innerHTML=rows.map(r=>`<span class="nm ${r[3]<.5?'rough':''}">${r[0]}</span>${fitBar(r[3])}<span class="v">${r[1]}<small>${r[2]}</small></span>`).join('');
+  document.querySelectorAll('.cand').forEach((e,i)=>e.classList.toggle('on',i===sel));
+  renderPads(); renderMap(); draw();
+}
+
+/* strip */
+function renderStrip(){
+  document.getElementById('strip').innerHTML=C.map((c,i)=>{
+    const col=zColor((1-c.score)*4);
+    return `<button class="cand" data-i="${i}"><img alt="" data-thumb="${i}"><div class="cand-h">#${i+1}<span class="sc">${Math.round(c.score*100)}%</span></div><div class="sbar"><i style="width:${c.score*100}%;background:${col}"></i></div><div class="cand-m"><b>${fmtGPa(c.ex)}</b> GPa · <b>${(c.pore*2000).toFixed(0)}</b> µm</div></button>`;}).join('');
+  document.querySelectorAll('.cand').forEach(e=>e.onclick=()=>{sel=+e.dataset.i;renderInsp();});
+}
+
+/* result map (layout B) */
+function renderMap(){
+  const svg=document.getElementById('mapSvg'),w=600,h=420,p=40;
+  let s=7,r=()=>{s=(s*16807)%2147483647;return s/2147483647};
+  let cloud='';for(let i=0;i<700;i++){const a=r(),b=r();const x=.02+.45*Math.pow(a,1.4),y=.05+.4*(1-Math.pow(a,.8))*b+.08*r();cloud+=`<circle cx="${p+x*2*(w-2*p)}" cy="${h-p-y*2.2*(h-2*p)}" r="1.6" fill="#4FB8C9" opacity=".18"/>`;}
+  const sx=v=>p+(v/.5)*(w-2*p), sy=v=>h-p-((v-.04)/.46)*(h-2*p);
+  const tx=sx(.2525),ty=sy(.27);
+  let top=C.map((c,i)=>`<g><circle cx="${sx(c.ex)}" cy="${sy(c.pore)}" r="${i===sel?11:9}" fill="${i===sel?'#c8f542':'#0c1a24'}" stroke="${i===sel?'#c8f542':'#4FB8C9'}"/><text x="${sx(c.ex)}" y="${sy(c.pore)+4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="${i===sel?'#0a1206':'#7BD3E3'}">${i+1}</text></g>`).join('');
+  svg.innerHTML=`<rect x="${p}" y="${p}" width="${w-2*p}" height="${h-2*p}" fill="#080b12" stroke="rgba(255,255,255,.07)"/>${cloud}
+   <circle cx="${tx}" cy="${ty}" r="34" fill="none" stroke="#FFB670" stroke-dasharray="3 4" opacity=".6"/><circle cx="${tx}" cy="${ty}" r="6" fill="none" stroke="#FFB670" stroke-width="2"/>
+   ${top}
+   <text x="${w/2}" y="${h-12}" text-anchor="middle" font-family="IBM Plex Mono" font-size="14" fill="#7BD3E3">stiffness Ex →</text>
+   <text x="16" y="${h/2}" text-anchor="middle" font-family="IBM Plex Mono" font-size="14" fill="#FFB670" transform="rotate(-90 16 ${h/2})">median pore →</text>
+   <text x="${w-p-6}" y="${p+16}" text-anchor="end" font-family="IBM Plex Mono" font-size="13" fill="#5f6582">faint: all 6,400 scored · ring: 1σ around target</text>`;
+}
+
+/* ── raymarcher (F13LD-SHADE v1, verbatim) ── */
+const F13_SHADE_GLSL = `
+uniform float uF13Shadow;uniform float uF13AO;uniform float uF13WarmCool;uniform float uF13Cut;uniform float uF13Lime;uniform float uF13Interact;
+vec3 f13Lin(vec3 c){return pow(max(c,vec3(0.0)),vec3(2.2));}
+vec3 f13Tone(vec3 c){c=(c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14);return pow(clamp(c,0.0,1.0),vec3(1.0/2.2));}
+vec3 f13KeyDir(mat3 R){return normalize(-0.55*R[0]+0.75*R[1]+0.55*R[2]);}
+vec3 f13FillDir(mat3 R){return normalize(0.7*R[0]-0.35*R[1]+0.25*R[2]);}
+float f13AO(vec3 p,vec3 n,float cell,float eps){
+  float occ=0.0;float w=1.0;
+  for(int i=0;i<5;i++){float h=cell*(0.04+0.04*float(i))+2.0*eps;float d=f13Map(p+n*h);occ+=max(h-d,0.0)*w;w*=0.8;}
+  return clamp(1.0-occ*(3.2/cell),0.0,1.0);
+}
+float f13Shadow(vec3 ro,vec3 ld,float eps,float tMax){
+  float res=1.0;float t=4.0*eps;
+  for(int i=0;i<48;i++){float h=f13Map(ro+ld*t);res=min(res,8.0*h/t);t+=clamp(h,0.75*eps,tMax*0.05);if(res<0.02||t>tMax)break;}
+  return clamp(res,0.0,1.0);
+}
+vec3 f13Shade(vec3 base,vec3 p,vec3 n,vec3 rd,mat3 R,bool isCut,float cell,float eps,float tMax){
+  vec3 alb=f13Lin(base);
+  if(uF13Cut>0.5&&isCut){float lum=dot(alb,vec3(0.2126,0.7152,0.0722));alb=mix(alb,vec3(lum),0.3)*0.9;}
+  bool wc=uF13WarmCool>0.5;
+  vec3 kD=f13KeyDir(R);vec3 fD=f13FillDir(R);
+  vec3 kC=wc?vec3(1.0,0.93,0.82)*1.35:vec3(1.3);
+  vec3 fC=wc?vec3(0.30,0.42,0.62)*0.75:vec3(0.5);
+  float kd=max(dot(n,kD),0.0);
+  float sh=1.0;if(uF13Shadow>0.5&&uF13Interact<0.5&&kd>0.0)sh=f13Shadow(p+n*3.0*eps,kD,eps,tMax);
+  float ao=1.0;if(uF13AO>0.5)ao=f13AO(p,n,cell,eps);
+  float hemi=0.5+0.5*dot(n,R[1]);
+  vec3 amb=mix(vec3(0.10,0.09,0.08),wc?vec3(0.20,0.23,0.30):vec3(0.24),hemi);
+  float vf=max(dot(n,-rd),0.0);
+  vec3 col=alb*(kC*kd*sh+fC*max(dot(n,fD),0.0)*mix(0.4,1.0,ao)+vec3(0.30)*vf*ao+amb*ao);
+  col+=vec3(0.35)*pow(max(dot(n,normalize(kD-rd)),0.0),48.0)*sh;
+  float fr=pow(1.0-vf,3.0);
+  if(uF13Lime>0.5)col+=f13Lin(vec3(0.784,0.961,0.259))*0.9*fr*ao;else col+=(alb*0.6+vec3(0.06))*fr*ao*0.5;
+  return f13Tone(col);
+}
+`;
+const VS=`#version 300 es
+in vec2 a;void main(){gl_Position=vec4(a,0,1);}`;
+const FS=`#version 300 es
+precision highp float;out vec4 o;
+uniform vec2 uRes;uniform mat3 uR;uniform float uDist;uniform int uMode;uniform float uLvl;uniform float uCells;uniform vec3 uPS;uniform int uClip;
+uniform int uN;uniform float uCoef[6];uniform vec4 uFac[18];
+const float PI=3.14159265;
+float phi(vec3 q){float s=0.0;for(int t=0;t<6;t++){if(t>=uN)break;float pr=uCoef[t];for(int k=0;k<3;k++){vec4 f=uFac[t*3+k];if(f.x<0.5)continue;float v=(f.y<0.5?q.x:(f.y<1.5?q.y:q.z))*f.z;pr*=(f.x<1.5?sin(v):cos(v));}s+=pr;}return s;}
+vec3 gradPhi(vec3 q){float e=0.01;return vec3(phi(q+vec3(e,0,0))-phi(q-vec3(e,0,0)),phi(q+vec3(0,e,0))-phi(q-vec3(0,e,0)),phi(q+vec3(0,0,e))-phi(q-vec3(0,0,e)))/(2.0*e);}
+float field(vec3 p){vec3 q=p*PI*uCells;float a=phi(q);float g=max(length(gradPhi(q)),0.25);
+  float d;
+  if(uMode==0)d=(a-uLvl)/g;                                      /* solid */
+  else if(uMode==1)d=abs(a)/g-uLvl;                              /* shell */
+  else{float b=phi(q+uPS*2.0*PI);float gb=max(length(gradPhi(q+uPS*2.0*PI)),0.25);d=length(vec2(a/g,b/gb))-uLvl;} /* pi-tpms */
+  return d/(PI*uCells);}
+float box(vec3 p){vec3 d=abs(p)-vec3(1.0);return max(max(d.x,d.y),d.z);}
+bool gCut=false;
+float f13Map(vec3 p){float d=field(p);float b=box(p);if(uClip==1){b=max(b,p.z-0.15);} return max(d,b);}
+${F13_SHADE_GLSL}
+void main(){vec2 uv=(gl_FragCoord.xy*2.0-uRes)/uRes.y;
+  vec3 ro=uR*vec3(0,0,uDist);vec3 rd=normalize(uR*normalize(vec3(uv,-2.2)));
+  /* enter the box */
+  vec3 inv=1.0/rd;vec3 t0=(-1.0-ro)*inv,t1=(1.0-ro)*inv;vec3 tn=min(t0,t1),tf=max(t0,t1);float tN=max(max(tn.x,tn.y),tn.z),tF=min(min(tf.x,tf.y),tf.z);
+  vec3 bg=vec3(0.024,0.031,0.06);
+  if(tN>tF||tF<0.0){o=vec4(bg,1);return;}
+  float t=max(tN,0.0);bool hit=false;vec3 p;
+  for(int i=0;i<160;i++){p=ro+rd*t;float d=f13Map(p);if(d<0.0015){hit=true;break;}t+=max(d*0.8,0.002);if(t>tF+0.01)break;}
+  if(!hit){o=vec4(bg,1);return;}
+  float e=0.0015;vec3 n=normalize(vec3(f13Map(p+vec3(e,0,0))-f13Map(p-vec3(e,0,0)),f13Map(p+vec3(0,e,0))-f13Map(p-vec3(0,e,0)),f13Map(p+vec3(0,0,e))-f13Map(p-vec3(0,0,e))));
+  bool cut=box(p)>-0.004||(uClip==1&&abs(p.z-0.15)<0.004);
+  o=vec4(f13Shade(vec3(0.369,0.792,0.647),p,n,rd,uR,cut,2.0/uCells,0.0015,4.0),1);}`;
+
+const glc=document.createElement('canvas');
+const gl=glc.getContext('webgl2',{preserveDrawingBuffer:true,antialias:false});
+let prog=null,U={};
+if(gl){
+  const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(x));return x;};
+  prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);gl.useProgram(prog);
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  ['uRes','uR','uDist','uMode','uLvl','uCells','uPS','uClip','uN','uCoef','uFac','uF13Shadow','uF13AO','uF13WarmCool','uF13Cut','uF13Lime','uF13Interact'].forEach(k=>U[k]=gl.getUniformLocation(prog,k));
+}
+let yaw=0.75,pitch=0.5,cells=1,clip=false;
+function rot(){const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  // columns: right, up, back
+  return [cy,0,-sy, sy*sp,cp,cy*sp, sy*cp,-sp,cy*cp];}
+function renderTo(c,w,h,interact){
+  if(!gl)return;
+  glc.width=w;glc.height=h;gl.viewport(0,0,w,h);
+  const mode={solid:0,shell:1,'pi-tpms':2}[c.mode];
+  gl.uniform2f(U.uRes,w,h);gl.uniformMatrix3fv(U.uR,false,rot());gl.uniform1f(U.uDist,4.4);
+  gl.uniform1i(U.uMode,mode);gl.uniform1f(U.uLvl,mode===0?(c.off||0):mode===1?(c.wt||.3)*0.55:(c.pipe||.2)*0.9);
+  gl.uniform1f(U.uCells,cells);gl.uniform3f(U.uPS,...(c.ps||[0,0,0]));gl.uniform1i(U.uClip,clip?1:0);
+  gl.uniform1i(U.uN,c.terms.length);
+  const co=new Float32Array(6),fa=new Float32Array(72);
+  c.terms.forEach((t,i)=>{co[i]=t.coef;t.f.forEach((f,k)=>{fa.set([f[0],f[1],f[2],0],(i*3+k)*4);});});
+  gl.uniform1fv(U.uCoef,co);gl.uniform4fv(U.uFac,fa);
+  gl.uniform1f(U.uF13Shadow,1);gl.uniform1f(U.uF13AO,1);gl.uniform1f(U.uF13WarmCool,1);gl.uniform1f(U.uF13Cut,1);gl.uniform1f(U.uF13Lime,0);gl.uniform1f(U.uF13Interact,interact?1:0);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+const viewCtx={};
+function host(id){const h=document.getElementById(id);let c=h.querySelector('canvas.v');if(!c){c=document.createElement('canvas');c.className='v';h.appendChild(c);
+  let drag=false,lx=0,ly=0;c.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;c.setPointerCapture(e.pointerId);};
+  c.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-lx)*0.01;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.clientY-ly)*0.01));lx=e.clientX;ly=e.clientY;draw(true);};
+  c.onpointerup=()=>{drag=false;draw();};}
+  return c;}
+function blit(target,interact){
+  const r=target.getBoundingClientRect();if(r.width<10||r.height<10)return;
+  const scale=interact?0.5:Math.min(window.devicePixelRatio||1,1.5);
+  const w=Math.round(r.width*scale),h=Math.round(r.height*scale);
+  renderTo(C[sel],w,h,interact);
+  target.width=w;target.height=h;target.getContext('2d').drawImage(glc,0,0);
+}
+let raf=0;
+function draw(interact){cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
+  const app=document.getElementById('app');
+  if(app.classList.contains('layA')||getComputedStyle(document.querySelector('.p-view')).display!=='none') blit(host('viewHost'),interact);
+  if(app.classList.contains('layB')) blit(host('inspViewHost'),interact);
+});}
+function thumbs(){
+  if(!gl)return;const saveY=yaw,saveP=pitch,saveC=cells,saveClip=clip;cells=1;clip=false;
+  C.forEach((c,i)=>{renderTo(c,180,180,false);const url=glc.toDataURL();document.querySelectorAll(`[data-thumb="${i}"]`).forEach(im=>im.src=url);});
+  yaw=saveY;pitch=saveP;cells=saveC;clip=saveClip;
+}
+
+/* chrome wiring */
+document.querySelectorAll('#tiling button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#tiling button').forEach(x=>x.classList.toggle('on',x===b));cells=+b.dataset.v;draw();});
+document.getElementById('clipBtn').onclick=e=>{clip=!clip;e.currentTarget.classList.toggle('on',clip);draw();};
+document.querySelectorAll('#conn button').forEach(b=>b.onclick=()=>document.querySelectorAll('#conn button').forEach(x=>x.classList.toggle('on',x===b)));
+document.getElementById('cfgBtn').onclick=e=>{const d=document.getElementById('drawer');d.classList.toggle('open');e.currentTarget.classList.toggle('on',d.classList.contains('open'));};
+document.querySelectorAll('#mkLayout button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#mkLayout button').forEach(x=>x.classList.toggle('on',x===b));const a=document.getElementById('app');a.classList.toggle('layA',b.dataset.v==='A');a.classList.toggle('layB',b.dataset.v==='B');setTimeout(()=>draw(),30);});
+document.querySelectorAll('#mkDevice button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#mkDevice button').forEach(x=>x.classList.toggle('on',x===b));document.getElementById('stage').classList.toggle('phone',b.dataset.v==='phone');setTimeout(()=>draw(),60);});
+document.querySelectorAll('#mapAx button').forEach(b=>b.onclick=()=>document.querySelectorAll('#mapAx button').forEach(x=>x.classList.toggle('on',x===b)));
+document.getElementById('r2').innerHTML=[['Volume fraction',.91],['Stiffness Ex',.76],['Stiffness Ey',.67],['Stiffness Ez',.60],['Thermal cond.',.88],['Surface complexity',.86],['Pore size CV',.72],['Median pore',.50],['Connected axes',.49],['Anisotropy',-.03]].map(([n,r])=>`<div class="r2row"><span>${n}</span><span class="bar"><i style="width:${Math.max(2,r*100)}%;background:${r>=.7?'#5BB892':r>=.4?'#4FB8C9':'#ffa028'}"></i></span><b>${r.toFixed(2)}</b></div>`).join('');
+window.addEventListener('resize',()=>draw());
+renderStrip();renderInsp();thumbs();
+</script>
+</body>
+</html>
