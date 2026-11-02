@@ -1,0 +1,71 @@
+{
+  "id": 10,
+  "slug": "classic-scripts-no-build",
+  "title": "Numbered classic scripts in one global scope, no build step, hosted on GitHub Pages",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "architecture"
+  ],
+  "status": "found",
+  "context": "index.html loads 00- to 99- scripts in order; each may only use names from same- or lower-numbered files (tests/loadorder.js). The worker importScripts 10/11/12. tools/build-single.js makes a one-file preview. Same layout as F13LD.mesh, lab and sweep.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Numbered classic scripts (current)",
+      "summary": "Shared global scope, load order by file number.",
+      "pros": [
+        "Matches the rest of the suite",
+        "No tooling; edit and reload",
+        "Worker reuses the same files"
+      ],
+      "cons": [
+        "Global namespace collisions possible",
+        "Load order is a convention checked by a test"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Native ES modules, no bundler",
+      "summary": "import/export with module workers.",
+      "pros": [
+        "Explicit dependencies, no load-order rule",
+        "Matches the convention another project settled"
+      ],
+      "cons": [
+        "Diverges from the other F13LD tools",
+        "Single-file build needs rework"
+      ],
+      "effort": "Medium",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "README \"Repo structure\" and CLAUDE.md \"Code layout\" state it; tests/loadorder.js enforces it. Note: ~/crux/conventions.md settles \"front-end build\" as plain ES modules for AcuLoad, so confirming this records a cross-project difference.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Repo structure"
+    },
+    {
+      "file": "CLAUDE.md",
+      "entry": "Code layout"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

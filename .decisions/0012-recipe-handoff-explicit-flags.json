@@ -1,0 +1,64 @@
+{
+  "id": 12,
+  "slug": "recipe-handoff-explicit-flags",
+  "title": "Results hand off as F13LD.tpms recipes in the URL, with normalization flags always written",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "data-model",
+    "architecture"
+  ],
+  "status": "found",
+  "context": "43-handoff.js opens F13LD.mesh with ?r=<recipe JSON> and F13LD.lab with #r=, or copies the JSON. Recipes follow F13LD.tpms v1.1.0 and always write shell_normalize / pi_normalize, because Mesh and Sweep default a missing flag to on and Lab to off.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Recipe JSON in the URL, flags explicit (current)",
+      "summary": "No server; the recipe is the whole contract.",
+      "pros": [
+        "Works across static sites",
+        "Explicit flags fixed PI-TPMS building at 3 to 4× predicted density in Lab"
+      ],
+      "cons": [
+        "Long URLs; tools disagree on defaults, so every writer must remember the flags"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Recipe schema with a version and required flags",
+      "summary": "Make the flags mandatory in the recipe spec and have readers reject or warn on missing ones.",
+      "pros": [
+        "Fixes the default mismatch at the source"
+      ],
+      "cons": [
+        "Needs changes in Mesh, Lab and Sweep"
+      ],
+      "effort": "Medium",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "README \"Recipes say how they are normalized\" and the v0.3.0 recap; implemented in 10-encoding.js (recipe writer) and 43-handoff.js.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Architecture notes: Recipes say how they are normalized"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

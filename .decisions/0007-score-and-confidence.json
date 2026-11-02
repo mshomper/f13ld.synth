@@ -1,0 +1,81 @@
+{
+  "id": 7,
+  "slug": "score-and-confidence",
+  "title": "Match is a Gaussian of z-scores against the trainer's residual σ; confidence is tree spread versus the seeds",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "solver"
+  ],
+  "status": "found",
+  "context": "12-search-core.js scores each targeted metric as z = (pred − target)/σ with σ from the bundle's test residuals, combines them as score = exp(−zRms²/6), and discounts by tree spread relative to the median spread on training seeds (no cut up to 1.25×, falling off after, ×0.7 past 2×). Labels high/medium/low come from the same ratio.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "z-score match plus spread penalty (current)",
+      "summary": "Error-aware scoring with hand-set penalty breakpoints.",
+      "pros": [
+        "Uses each metric's real model error, so weak metrics are scored loosely",
+        "Spread penalty stopped wide searches drifting into low-confidence designs (v0.4 recap)"
+      ],
+      "cons": [
+        "Breakpoints 1.25 / 2 / 0.7 are tuned by eye",
+        "Global σ per metric, not per design"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Per-design intervals (quantile forests or conformal)",
+      "summary": "Predict an interval per candidate and score the probability of hitting the target band.",
+      "pros": [
+        "Honest per-design uncertainty; replaces two mechanisms with one"
+      ],
+      "cons": [
+        "Trainer and bundle change; more compute per candidate"
+      ],
+      "effort": "Medium to large",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "Nearest-neighbor distance to seeds for out-of-distribution",
+      "summary": "README v0.2 plans mention a k-NN distance check.",
+      "pros": [
+        "Simple, model-independent"
+      ],
+      "cons": [
+        "Distance in a padded feature space is a weak proxy"
+      ],
+      "effort": "Small",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "12-search-core.js scoreCandidate / spreadFactor / confidenceLabel; README \"Confidence from tree spread\"; v0.4 recap \"Stricter confidence penalty\" approved by Matt.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Architecture notes: Confidence from tree spread"
+    },
+    {
+      "file": "docs/SESSION_RECAP_2026-10-09.md",
+      "entry": "v0.4.0: Stricter penalty on low-confidence designs"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

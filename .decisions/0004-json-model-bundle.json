@@ -1,0 +1,81 @@
+{
+  "id": 4,
+  "slug": "json-model-bundle",
+  "title": "The whole model ships as one JSON file of explicit trees",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "data-model",
+    "architecture"
+  ],
+  "status": "found",
+  "context": "train_synth.py writes weights/tpms.json: every tree node as JSON arrays rounded to 4 decimals, plus encoding, seeds and eval. 20-predictor.js fetches it, 11-forest.js repacks it into 12-byte binary node records, then drops the parsed JSON. The file is now 38 MB (36.6 MB per docs/HOW-TO-retrain-synth.md); README still says 15 MB.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "One JSON bundle (current)",
+      "summary": "Human-readable, single fetch, gzip on the wire from GitHub Pages.",
+      "pros": [
+        "Simple to inspect and diff the meta block",
+        "No extra tooling"
+      ],
+      "cons": [
+        "Over GitHub's 25 MB browser upload, so deploys go through GitHub Desktop or a zip handed to Claude",
+        "Parse cost and memory spike before packing",
+        "Each retrain adds ~38 MB to git history"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "JSON meta plus a binary tree file",
+      "summary": "Trainer emits the same 12-byte packed records Synth already builds, as a .bin beside a small JSON.",
+      "pros": [
+        "Roughly a third of the size, no parse step",
+        "Browser can use the buffer directly"
+      ],
+      "cons": [
+        "Two files to version together",
+        "Trainer must replicate the packing (already specified in 11-forest.js)"
+      ],
+      "effort": "Small to medium",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "Shrink the JSON",
+      "summary": "Fewer trees, 3 decimals, or split per metric.",
+      "pros": [
+        "No format change"
+      ],
+      "cons": [
+        "Costs R² or only delays the problem as Vault grows"
+      ],
+      "effort": "Small",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "train_synth.py _serialize_tree, 20-predictor.js loadFamily and 11-forest.js pack show the JSON-then-pack path; README \"Versioning\" ties the bundle's meta block to cache busting.",
+  "deliberate": "likely",
+  "holding_up": "strained",
+  "strain": "The bundle grew from 15 MB to 36.6 MB and no longer uploads through GitHub's web UI; NEXT-UP lists serving it gzipped or split as an idea.",
+  "log_refs": [
+    {
+      "file": "docs/NEXT-UP.md",
+      "entry": "Ideas: Serve the model gzipped or split it"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

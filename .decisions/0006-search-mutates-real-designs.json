@@ -1,0 +1,84 @@
+{
+  "id": 6,
+  "slug": "search-mutates-real-designs",
+  "title": "Inverse search mutates real training designs in timed rounds and scores the exact recipe it sends",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "solver",
+    "architecture"
+  ],
+  "status": "found",
+  "context": "12-search-core.js decodes training seeds into recipes, varies them the way F13LD.sweep does (nudges within training ranges, sin/cos swaps, frequency changes), encodes and scores each one. Rounds grow from the current best and from the best in each cell of a 24×24 grid, with a shrinking step, under a time budget (00-config.js SEARCH_DEPTHS) on a worker pool (20-predictor.js).",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Seeded mutation over real designs (current)",
+      "summary": "Evolutionary search anchored to training seeds, scoring the exact design.",
+      "pros": [
+        "Scored design and sent design are identical (v0.2 differed by a median 22 points)",
+        "Stays near the data the model knows",
+        "Grid keeps alternatives spread over the map"
+      ],
+      "cons": [
+        "Cannot find designs far from any seed",
+        "Hand-tuned round schedule (ROUND constants)"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Optimize a continuous feature vector, then snap to a recipe",
+      "summary": "The v0.2 approach.",
+      "pros": [
+        "Simple optimizer"
+      ],
+      "cons": [
+        "Ranks a design it never sends; replaced in v0.3.0 for that reason"
+      ],
+      "effort": "n/a, already abandoned",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "CMA-ES or Bayesian optimization over recipe parameters",
+      "summary": "A formal optimizer on the decoded recipe space.",
+      "pros": [
+        "Better sample efficiency on hard targets"
+      ],
+      "cons": [
+        "Mixed discrete and continuous structure (terms, trig choice) fits poorly",
+        "Loses the map-filling behavior"
+      ],
+      "effort": "Medium",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "README \"Search over real designs\" and \"Rounds, by time\" describe it and the v0.3.0 recap records why the snap approach was dropped; implemented in 12-search-core.js and worker/search-worker.js.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Architecture notes: Search over real designs; Rounds, by time"
+    },
+    {
+      "file": "docs/SESSION_RECAP_2026-10-09.md",
+      "entry": "v0.3.0: Synth scores what it sends"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

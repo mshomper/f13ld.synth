@@ -1,0 +1,66 @@
+{
+  "id": 3,
+  "slug": "normalized-geometry-outputs",
+  "title": "The model predicts material-free normalized outputs; units appear only at display",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "data-model",
+    "solver"
+  ],
+  "status": "found",
+  "context": "train_synth.py extract_outputs() divides stiffness by E_solid, pore size by cell size and conductivity by k_solid per sweep. 30-material.js multiplies back using the material card shared with Vault through localStorage (f13ld.vault.globalInputs.v1).",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Normalized targets, scale at display (current)",
+      "summary": "Geometry-only model; physical GPa, µm, W/mK computed from the material card.",
+      "pros": [
+        "Changing material never invalidates the model",
+        "Pools sweeps run on different materials"
+      ],
+      "cons": [
+        "Assumes linear scaling with solid properties",
+        "Rows missing a reference value lose that metric (e.g. 414 rows with no k_solid)"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Material as an input feature",
+      "summary": "Feed E_solid, k_solid etc. into the model and predict physical values.",
+      "pros": [
+        "Could capture non-linear material effects"
+      ],
+      "cons": [
+        "Needs far more data per material",
+        "Model changes with every new material"
+      ],
+      "effort": "Large",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "README \"Material card\" says the trainer always works in normalized space and resolution happens at display only; train_synth.py extract_outputs() and 30-material.js implement it.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Material card"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

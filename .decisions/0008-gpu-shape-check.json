@@ -1,0 +1,82 @@
+{
+  "id": 8,
+  "slug": "gpu-shape-check",
+  "title": "Measured solid fraction from a GPU field sample overrides the model's volume fraction",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "solver",
+    "architecture"
+  ],
+  "status": "found",
+  "context": "After the search, 20-predictor.js shapeCheck() measures the best 16 designs' solid fraction on a 48³ grid over one cell using the preview's field (25-raymarch.js), replaces predicted volume fraction, and cuts confidence when the model was off by more than 2σ (low past 3σ). Recipes record it under synth.measured.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Fixed 48³ GPU sample of the top 16 (current)",
+      "summary": "Same field as the preview and F13LD.mesh; one grid size for all modes.",
+      "pros": [
+        "Volume-fraction targets scored on the real shape",
+        "Catches model errors far from data (4.5% vs 20.6% case)"
+      ],
+      "cons": [
+        "Thin PI-TPMS pipes may be under-sampled",
+        "Adds seconds on software renderers"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Adaptive or finer grid for PI-TPMS",
+      "summary": "Sample finer where walls or pipes are thin.",
+      "pros": [
+        "Fixes the suspected PI miss"
+      ],
+      "cons": [
+        "More GPU time; needs a thickness heuristic"
+      ],
+      "effort": "Small to medium",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "Treat the check as advisory only",
+      "summary": "Show the measured value but keep the model's for scoring.",
+      "pros": [
+        "Cheaper, simpler"
+      ],
+      "cons": [
+        "Ranks designs on a number known to be wrong"
+      ],
+      "effort": "Small",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "Approved by Matt in v0.4.1 (recap \"Shape check\"); README \"Shape check\"; 20-predictor.js shapeCheck and 12-search-core.js shapeCheck.",
+  "deliberate": "yes",
+  "holding_up": "strained",
+  "strain": "In the Mesh check every PI-TPMS design built 2 to 4 points thinner than predicted; whether the model or the 48³ sampling is wrong is an open hand check in docs/NEXT-UP.md.",
+  "log_refs": [
+    {
+      "file": "docs/SESSION_RECAP_2026-10-09.md",
+      "entry": "v0.4.1: Shape check, approved by Matt"
+    },
+    {
+      "file": "docs/NEXT-UP.md",
+      "entry": "Check by hand: PI-TPMS volume fraction"
+    }
+  ],
+  "open_item": true,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

@@ -1,0 +1,85 @@
+{
+  "id": 2,
+  "slug": "unified-feature-vector",
+  "title": "One model per family on a zero-padded unified feature vector, encoded twice (Python and JS)",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "data-model",
+    "solver"
+  ],
+  "status": "found",
+  "context": "encode_design_unified() in train_synth.py and SynthEncoding.encode() in 10-encoding.js build the same fixed-length vector: mode one-hot, then term and factor slots padded to max_terms / max_factors. The layout is read from the bundle's encoding block, but the encoding logic itself exists in both languages and must change together (CLAUDE.md).",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Unified vector, mirrored by hand (current)",
+      "summary": "One family model; Python and JS encoders kept slot-for-slot identical, checked by tests/roundtrip.js.",
+      "pros": [
+        "Turned per-config R² 0.25 into 0.71 unified (README)",
+        "Bundle-driven layout tolerates a larger term cap without page edits"
+      ],
+      "cons": [
+        "Two implementations to keep in lockstep",
+        "New modes or fields (per-axis cell scale, surface_b) need both sides and a retrain"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "Encoding spec as data, both sides generated",
+      "summary": "Describe slots declaratively in the bundle (or a shared JSON) and have thin interpreters in Python and JS.",
+      "pros": [
+        "Adding a field becomes one edit",
+        "Drift becomes impossible rather than tested-for"
+      ],
+      "cons": [
+        "Upfront rework of both encoders",
+        "Interpreter must cover term structure, which is not flat"
+      ],
+      "effort": "Medium",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "Per-mode or per-preset models",
+      "summary": "Separate models per mode or per preset family.",
+      "pros": [
+        "Each model simpler"
+      ],
+      "cons": [
+        "Exactly what failed before (R² 0.25)",
+        "Many more bundles"
+      ],
+      "effort": "Medium",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "README \"Unified feature vector\" states the choice and its trade-off; CLAUDE.md requires the two encoders to change together; tests/roundtrip.js checks 600/600 seeds re-encode exactly.",
+  "deliberate": "yes",
+  "holding_up": "strained",
+  "strain": "Two known encoder gaps (Sweep's per-axis cell_scale_x/y/z and field-pair PI-TPMS surface_b) are waiting on a coordinated Python + JS + retrain change (docs/NEXT-UP.md).",
+  "log_refs": [
+    {
+      "file": "README.md",
+      "entry": "Architecture notes: Unified feature vector"
+    },
+    {
+      "file": "docs/NEXT-UP.md",
+      "entry": "Encoder gaps"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}

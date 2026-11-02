@@ -1,0 +1,81 @@
+{
+  "id": 9,
+  "slug": "three-pads-on-independent-axes",
+  "title": "Intent is set on three paired pads chosen from what varies independently in the data",
+  "date": "2026-11-02",
+  "mode": "quick",
+  "lenses": [
+    "ui",
+    "research"
+  ],
+  "status": "found",
+  "context": "01-defs.js and 31-pads.js define three X/Y pads (stiffness × pore size, main axis × off-axis share, porosity × pore spread), each off / prefer / require, instead of a slider per metric. Ranges are fixed from the 2026-10-09 data; derived metrics (stiff_main, stiff_ratio, porosity) are computed in 12-search-core.js addDerived.",
+  "depends_on": [],
+  "conflicts": [],
+  "options": [
+    {
+      "key": "A",
+      "name": "Three pads on independent axes (current)",
+      "summary": "Pairs follow the correlation structure: density, direction, pore uniformity.",
+      "pros": [
+        "Users cannot ask for impossible combinations as easily",
+        "Fewer controls than nine sliders"
+      ],
+      "cons": [
+        "Pad ranges and pairings depend on today's data and need re-checking after the Vault reseed"
+      ],
+      "effort": "In place",
+      "source": "claude"
+    },
+    {
+      "key": "B",
+      "name": "One slider per metric",
+      "summary": "The v0.1 framing.",
+      "pros": [
+        "Direct"
+      ],
+      "cons": [
+        "Most combinations unreachable (old Volume × Thermal pad was two-thirds unreachable)"
+      ],
+      "effort": "Small",
+      "source": "claude"
+    },
+    {
+      "key": "C",
+      "name": "Pads derived from the data at load",
+      "summary": "Compute principal directions or correlations from the bundle's seeds and lay out pads automatically.",
+      "pros": [
+        "Survives retrains without hand edits"
+      ],
+      "cons": [
+        "Axes stop being nameable physical quantities"
+      ],
+      "effort": "Large",
+      "source": "claude"
+    }
+  ],
+  "criteria": [],
+  "ruled_out": [],
+  "recommended": "A",
+  "recommendation": "Matt's v0.5.0 decisions in the recap; README \"The three pads\" gives the correlation evidence; implemented in 01-defs.js, 31-pads.js and 12-search-core.js.",
+  "deliberate": "yes",
+  "holding_up": "fine",
+  "strain": null,
+  "log_refs": [
+    {
+      "file": "docs/SESSION_RECAP_2026-10-09.md",
+      "entry": "v0.5.0: Pads re-paired around what varies on its own"
+    },
+    {
+      "file": "README.md",
+      "entry": "The three pads"
+    }
+  ],
+  "open_item": false,
+  "chosen": null,
+  "reason": null,
+  "decided_on": null,
+  "superseded_by": null,
+  "challenge": null,
+  "settles": []
+}
