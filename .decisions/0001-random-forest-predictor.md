@@ -1,11 +1,15 @@
 # 0001 Random forests trained offline in Python, run in the browser
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: solver, architecture
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Architecture notes: Random Forest, not MLP
+
+## Decision
+
+**A: Random forests (current).** Per-metric RF regressors plus an RF validity classifier, exported as raw trees.
 
 ## Context
 
@@ -13,7 +17,7 @@ train_synth.py fits scikit-learn RandomForestClassifier (validity) and one Rando
 
 ## Options
 
-### A: Random forests (current) (recommended)
+### A: Random forests (current) (chosen) (recommended)
 
 Per-metric RF regressors plus an RF validity classifier, exported as raw trees.
 - Pro: Beat an MLP by 0.5+ mean R² at 257 samples (README)

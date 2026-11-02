@@ -1,12 +1,15 @@
 # 0008 Measured solid fraction from a GPU field sample overrides the model's volume fraction
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: solver, architecture
 - Deliberate: yes
 - Holding up: strained. In the Mesh check every PI-TPMS design built 2 to 4 points thinner than predicted; whether the model or the 48³ sampling is wrong is an open hand check in docs/NEXT-UP.md.
-- Open item in the repo's own log
 - In the repo's log: docs/SESSION_RECAP_2026-10-09.md v0.4.1: Shape check, approved by Matt; docs/NEXT-UP.md Check by hand: PI-TPMS volume fraction
+
+## Decision
+
+**A: Fixed 48³ GPU sample of the top 16 (current).** Same field as the preview and F13LD.mesh; one grid size for all modes.
 
 ## Context
 
@@ -14,7 +17,7 @@ After the search, 20-predictor.js shapeCheck() measures the best 16 designs' sol
 
 ## Options
 
-### A: Fixed 48³ GPU sample of the top 16 (current) (recommended)
+### A: Fixed 48³ GPU sample of the top 16 (current) (chosen) (recommended)
 
 Same field as the preview and F13LD.mesh; one grid size for all modes.
 - Pro: Volume-fraction targets scored on the real shape

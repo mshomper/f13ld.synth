@@ -1,12 +1,15 @@
 # 0013 Synth reads Vault but never writes candidates back
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: data-model, research
 - Deliberate: yes
 - Holding up: fine
-- Open item in the repo's own log
 - In the repo's log: README.md The data lineage loop: Save-to-Vault mocked pending schema decision; docs/NEXT-UP.md Ideas: Save to Vault is still a placeholder
+
+## Decision
+
+**A: Read-only (current).** Vault holds FEA-characterized designs only.
 
 ## Context
 
@@ -14,7 +17,7 @@
 
 ## Options
 
-### A: Read-only (current) (recommended)
+### A: Read-only (current) (chosen) (recommended)
 
 Vault holds FEA-characterized designs only.
 - Pro: Training data stays clean of model guesses

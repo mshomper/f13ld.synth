@@ -8,7 +8,7 @@
     "solver",
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "train_synth.py fits scikit-learn RandomForestClassifier (validity) and one RandomForestRegressor per output metric (150 trees, max_depth 15, min_samples_leaf 2), serializes every tree to JSON, and 11-forest.js walks them in the browser. Tree spread doubles as the confidence signal (12-search-core.js scoreCandidate).",
   "depends_on": [],
   "conflicts": [],
@@ -75,9 +75,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

@@ -7,7 +7,7 @@
   "lenses": [
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "index.html loads 00- to 99- scripts in order; each may only use names from same- or lower-numbered files (tests/loadorder.js). The worker importScripts 10/11/12. tools/build-single.js makes a one-file preview. Same layout as F13LD.mesh, lab and sweep.",
   "depends_on": [],
   "conflicts": [],
@@ -62,10 +62,15 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
-  "settles": []
+  "settles": [
+    {
+      "key": "front-end build",
+      "value": "numbered classic scripts, no bundler"
+    }
+  ]
 }

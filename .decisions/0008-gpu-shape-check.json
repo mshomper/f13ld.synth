@@ -8,7 +8,7 @@
     "solver",
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "After the search, 20-predictor.js shapeCheck() measures the best 16 designs' solid fraction on a 48³ grid over one cell using the preview's field (25-raymarch.js), replaces predicted volume fraction, and cuts confidence when the model was off by more than 2σ (low past 3σ). Recipes record it under synth.measured.",
   "depends_on": [],
   "conflicts": [],
@@ -72,10 +72,10 @@
       "entry": "Check by hand: PI-TPMS volume fraction"
     }
   ],
-  "open_item": true,
-  "chosen": null,
+  "open_item": false,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

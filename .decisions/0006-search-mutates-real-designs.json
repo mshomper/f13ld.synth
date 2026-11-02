@@ -8,7 +8,7 @@
     "solver",
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "12-search-core.js decodes training seeds into recipes, varies them the way F13LD.sweep does (nudges within training ranges, sin/cos swaps, frequency changes), encodes and scores each one. Rounds grow from the current best and from the best in each cell of a 24×24 grid, with a shrinking step, under a time budget (00-config.js SEARCH_DEPTHS) on a worker pool (20-predictor.js).",
   "depends_on": [],
   "conflicts": [],
@@ -75,9 +75,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

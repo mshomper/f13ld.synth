@@ -1,11 +1,15 @@
 # 0003 The model predicts material-free normalized outputs; units appear only at display
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: data-model, solver
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Material card
+
+## Decision
+
+**A: Normalized targets, scale at display (current).** Geometry-only model; physical GPa, µm, W/mK computed from the material card.
 
 ## Context
 
@@ -13,7 +17,7 @@ train_synth.py extract_outputs() divides stiffness by E_solid, pore size by cell
 
 ## Options
 
-### A: Normalized targets, scale at display (current) (recommended)
+### A: Normalized targets, scale at display (current) (chosen) (recommended)
 
 Geometry-only model; physical GPa, µm, W/mK computed from the material card.
 - Pro: Changing material never invalidates the model

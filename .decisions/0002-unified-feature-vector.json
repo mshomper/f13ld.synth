@@ -8,7 +8,7 @@
     "data-model",
     "solver"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "encode_design_unified() in train_synth.py and SynthEncoding.encode() in 10-encoding.js build the same fixed-length vector: mode one-hot, then term and factor slots padded to max_terms / max_factors. The layout is read from the bundle's encoding block, but the encoding logic itself exists in both languages and must change together (CLAUDE.md).",
   "depends_on": [],
   "conflicts": [],
@@ -76,9 +76,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

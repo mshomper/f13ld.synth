@@ -8,7 +8,7 @@
     "ui",
     "research"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "01-defs.js and 31-pads.js define three X/Y pads (stiffness × pore size, main axis × off-axis share, porosity × pore spread), each off / prefer / require, instead of a slider per metric. Ranges are fixed from the 2026-10-09 data; derived metrics (stiff_main, stiff_ratio, porosity) are computed in 12-search-core.js addDerived.",
   "depends_on": [],
   "conflicts": [],
@@ -72,9 +72,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

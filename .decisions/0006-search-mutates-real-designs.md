@@ -1,11 +1,15 @@
 # 0006 Inverse search mutates real training designs in timed rounds and scores the exact recipe it sends
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: solver, architecture
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Architecture notes: Search over real designs; Rounds, by time; docs/SESSION_RECAP_2026-10-09.md v0.3.0: Synth scores what it sends
+
+## Decision
+
+**A: Seeded mutation over real designs (current).** Evolutionary search anchored to training seeds, scoring the exact design.
 
 ## Context
 
@@ -13,7 +17,7 @@
 
 ## Options
 
-### A: Seeded mutation over real designs (current) (recommended)
+### A: Seeded mutation over real designs (current) (chosen) (recommended)
 
 Evolutionary search anchored to training seeds, scoring the exact design.
 - Pro: Scored design and sent design are identical (v0.2 differed by a median 22 points)

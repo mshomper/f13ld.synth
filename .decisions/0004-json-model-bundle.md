@@ -1,11 +1,15 @@
 # 0004 The whole model ships as one JSON file of explicit trees
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: data-model, architecture
 - Deliberate: likely
 - Holding up: strained. The bundle grew from 15 MB to 36.6 MB and no longer uploads through GitHub's web UI; NEXT-UP lists serving it gzipped or split as an idea.
 - In the repo's log: docs/NEXT-UP.md Ideas: Serve the model gzipped or split it
+
+## Decision
+
+**A: One JSON bundle (current).** Human-readable, single fetch, gzip on the wire from GitHub Pages.
 
 ## Context
 
@@ -13,7 +17,7 @@ train_synth.py writes weights/tpms.json: every tree node as JSON arrays rounded 
 
 ## Options
 
-### A: One JSON bundle (current) (recommended)
+### A: One JSON bundle (current) (chosen) (recommended)
 
 Human-readable, single fetch, gzip on the wire from GitHub Pages.
 - Pro: Simple to inspect and diff the meta block

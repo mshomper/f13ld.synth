@@ -8,7 +8,7 @@
     "architecture",
     "research"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "docs/HOW-TO-retrain-synth.md has Matt run train_synth.py --from-vault locally and commit weights/tpms.json; the page picks it up on next load. The README calls this Pattern A and plans a GitHub Actions retrain (Pattern B). Filters such as --max-norm 1.3 and --solver-version decide which Vault rows train.",
   "depends_on": [],
   "conflicts": [],
@@ -71,9 +71,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

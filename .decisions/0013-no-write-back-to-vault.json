@@ -8,7 +8,7 @@
     "data-model",
     "research"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "21-vault.js only counts Vault rows for the model chip (public anon key in 00-config.js). The Save to Vault button described in the README is a placeholder \"pending a schema decision on candidate tagging\"; NEXT-UP still lists it.",
   "depends_on": [],
   "conflicts": [],
@@ -73,10 +73,10 @@
       "entry": "Ideas: Save to Vault is still a placeholder"
     }
   ],
-  "open_item": true,
-  "chosen": null,
+  "open_item": false,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

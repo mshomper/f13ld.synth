@@ -8,7 +8,7 @@
     "data-model",
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "43-handoff.js opens F13LD.mesh with ?r=<recipe JSON> and F13LD.lab with #r=, or copies the JSON. Recipes follow F13LD.tpms v1.1.0 and always write shell_normalize / pi_normalize, because Mesh and Sweep default a missing flag to on and Lab to off.",
   "depends_on": [],
   "conflicts": [],
@@ -55,9 +55,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

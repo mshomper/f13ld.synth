@@ -1,11 +1,15 @@
 # 0011 Suite-wide code is copied into each tool, not loaded from one shared place
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: architecture
 - Deliberate: yes
 - Holding up: strained. The "◐ view" glyph in the shared F13LD-VIEW block breaks the no-glyph rule; Synth patches it after init and NEXT-UP says the real fix has to go into every tool.
 - In the repo's log: CLAUDE.md Code layout; docs/NEXT-UP.md Ideas: shared F13LD-VIEW glyph
+
+## Decision
+
+**A: Copy per tool, kept identical by convention (current).** Each tool works standalone; sync by hand or script.
 
 ## Context
 
@@ -13,7 +17,7 @@
 
 ## Options
 
-### A: Copy per tool, kept identical by convention (current) (recommended)
+### A: Copy per tool, kept identical by convention (current) (chosen) (recommended)
 
 Each tool works standalone; sync by hand or script.
 - Pro: No cross-site runtime dependency

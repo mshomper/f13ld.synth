@@ -1,11 +1,15 @@
 # 0009 Intent is set on three paired pads chosen from what varies independently in the data
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: ui, research
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: docs/SESSION_RECAP_2026-10-09.md v0.5.0: Pads re-paired around what varies on its own; README.md The three pads
+
+## Decision
+
+**A: Three pads on independent axes (current).** Pairs follow the correlation structure: density, direction, pore uniformity.
 
 ## Context
 
@@ -13,7 +17,7 @@
 
 ## Options
 
-### A: Three pads on independent axes (current) (recommended)
+### A: Three pads on independent axes (current) (chosen) (recommended)
 
 Pairs follow the correlation structure: density, direction, pore uniformity.
 - Pro: Users cannot ask for impossible combinations as easily

@@ -1,11 +1,15 @@
 # 0007 Match is a Gaussian of z-scores against the trainer's residual σ; confidence is tree spread versus the seeds
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: solver
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Architecture notes: Confidence from tree spread; docs/SESSION_RECAP_2026-10-09.md v0.4.0: Stricter penalty on low-confidence designs
+
+## Decision
+
+**A: z-score match plus spread penalty (current).** Error-aware scoring with hand-set penalty breakpoints.
 
 ## Context
 
@@ -13,7 +17,7 @@
 
 ## Options
 
-### A: z-score match plus spread penalty (current) (recommended)
+### A: z-score match plus spread penalty (current) (chosen) (recommended)
 
 Error-aware scoring with hand-set penalty breakpoints.
 - Pro: Uses each metric's real model error, so weak metrics are scored loosely

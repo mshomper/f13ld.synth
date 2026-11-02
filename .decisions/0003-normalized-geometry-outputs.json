@@ -8,7 +8,7 @@
     "data-model",
     "solver"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "train_synth.py extract_outputs() divides stiffness by E_solid, pore size by cell size and conductivity by k_solid per sweep. 30-material.js multiplies back using the material card shared with Vault through localStorage (f13ld.vault.globalInputs.v1).",
   "depends_on": [],
   "conflicts": [],
@@ -57,9 +57,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

@@ -1,11 +1,15 @@
 # 0002 One model per family on a zero-padded unified feature vector, encoded twice (Python and JS)
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: data-model, solver
 - Deliberate: yes
 - Holding up: strained. Two known encoder gaps (Sweep's per-axis cell_scale_x/y/z and field-pair PI-TPMS surface_b) are waiting on a coordinated Python + JS + retrain change (docs/NEXT-UP.md).
 - In the repo's log: README.md Architecture notes: Unified feature vector; docs/NEXT-UP.md Encoder gaps
+
+## Decision
+
+**A: Unified vector, mirrored by hand (current).** One family model; Python and JS encoders kept slot-for-slot identical, checked by tests/roundtrip.js.
 
 ## Context
 
@@ -13,7 +17,7 @@ encode_design_unified() in train_synth.py and SynthEncoding.encode() in 10-encod
 
 ## Options
 
-### A: Unified vector, mirrored by hand (current) (recommended)
+### A: Unified vector, mirrored by hand (current) (chosen) (recommended)
 
 One family model; Python and JS encoders kept slot-for-slot identical, checked by tests/roundtrip.js.
 - Pro: Turned per-config R² 0.25 into 0.71 unified (README)

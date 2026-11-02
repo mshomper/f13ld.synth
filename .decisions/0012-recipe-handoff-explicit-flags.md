@@ -1,11 +1,15 @@
 # 0012 Results hand off as F13LD.tpms recipes in the URL, with normalization flags always written
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: data-model, architecture
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Architecture notes: Recipes say how they are normalized
+
+## Decision
+
+**A: Recipe JSON in the URL, flags explicit (current).** No server; the recipe is the whole contract.
 
 ## Context
 
@@ -13,7 +17,7 @@
 
 ## Options
 
-### A: Recipe JSON in the URL, flags explicit (current) (recommended)
+### A: Recipe JSON in the URL, flags explicit (current) (chosen) (recommended)
 
 No server; the recipe is the whole contract.
 - Pro: Works across static sites

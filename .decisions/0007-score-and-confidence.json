@@ -7,7 +7,7 @@
   "lenses": [
     "solver"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "12-search-core.js scores each targeted metric as z = (pred − target)/σ with σ from the bundle's test residuals, combines them as score = exp(−zRms²/6), and discounts by tree spread relative to the median spread on training seeds (no cut up to 1.25×, falling off after, ×0.7 past 2×). Labels high/medium/low come from the same ratio.",
   "depends_on": [],
   "conflicts": [],
@@ -72,9 +72,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

@@ -8,7 +8,7 @@
     "data-model",
     "architecture"
   ],
-  "status": "found",
+  "status": "decided",
   "context": "train_synth.py writes weights/tpms.json: every tree node as JSON arrays rounded to 4 decimals, plus encoding, seeds and eval. 20-predictor.js fetches it, 11-forest.js repacks it into 12-byte binary node records, then drops the parsed JSON. The file is now 38 MB (36.6 MB per docs/HOW-TO-retrain-synth.md); README still says 15 MB.",
   "depends_on": [],
   "conflicts": [],
@@ -72,9 +72,9 @@
     }
   ],
   "open_item": false,
-  "chosen": null,
+  "chosen": "A",
   "reason": null,
-  "decided_on": null,
+  "decided_on": "2026-11-02",
   "superseded_by": null,
   "challenge": null,
   "settles": []

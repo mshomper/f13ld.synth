@@ -1,11 +1,15 @@
 # 0005 Retraining is a manual run on Matt's machine, with weights committed to the repo
 
-- Status: found
-- Date: 2026-11-02
+- Status: decided
+- Date: 2026-11-02, decided 2026-11-02
 - Lenses: architecture, research
 - Deliberate: yes
 - Holding up: fine
 - In the repo's log: README.md Retraining: Pattern A
+
+## Decision
+
+**A: Manual local retrain, weights in git (current).** Matt runs the trainer when the Vault drift counter says so, then commits.
 
 ## Context
 
@@ -13,7 +17,7 @@ docs/HOW-TO-retrain-synth.md has Matt run train_synth.py --from-vault locally an
 
 ## Options
 
-### A: Manual local retrain, weights in git (current) (recommended)
+### A: Manual local retrain, weights in git (current) (chosen) (recommended)
 
 Matt runs the trainer when the Vault drift counter says so, then commits.
 - Pro: Full control and a human looks at every R² before it ships
